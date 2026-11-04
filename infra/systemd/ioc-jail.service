@@ -1,0 +1,14 @@
+[Unit]
+Description=IoC Sentinel sandbox jail network (iptables)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+EnvironmentFile=-@REPO_DIR@/.env
+ExecStart=/usr/bin/env bash @REPO_DIR@/infra/vm/jail-network.sh up
+ExecStop=/usr/bin/env bash @REPO_DIR@/infra/vm/jail-network.sh down
+
+[Install]
+WantedBy=multi-user.target
