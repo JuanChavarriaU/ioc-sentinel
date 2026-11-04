@@ -13,3 +13,12 @@ infra/terraform/terraform.tfvars
 infra/terraform/.terraform.tfstate.lock.info
 infra/terraform/crash.log
 infra/terraform/tfplan
+
+# secrets / keys (defense in depth)
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+*.bundle
