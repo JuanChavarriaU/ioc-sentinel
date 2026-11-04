@@ -41,6 +41,7 @@ Page content returned by the sandbox is treated as untrusted data (prompt-inject
 ```
 apps/api/            FastAPI orchestrator, sandbox runner (docker-py), URL guard, inference client
 sandbox/browser/     Sandbox image: Playwright worker (one URL in, one JSON line out)
+infra/terraform/     Vultr provider: VPC, edge firewall, VM (cloud-init), Serverless Inference subscription
 infra/vm/            bootstrap.sh (Ubuntu 24.04), jail-network.sh (iptables), gvisor.sh
 infra/systemd/       ioc-jail.service (re-applies the jail on boot)
 scripts/             check_models.py (Vultr capability matrix), smoke.sh (Day-1 acceptance)
@@ -48,15 +49,19 @@ demo/traps/          Fictional-brand trap page: credential form, metadata SSRF, 
 docs/                Runbooks and the verified model matrix
 ```
 
-## Quick start (on the Vultr VM)
+## Quick start
 
 ```bash
-git clone <repo> && cd ioc-sentinel
-sudo ./infra/vm/bootstrap.sh          # WITH_GVISOR=1 for runsc
-nano .env                             # VULTR_INFERENCE_API_KEY=...
-make check-models                     # which models do tool calling / vision
-make smoke                            # sandbox + containment probes must all be blocked
-make api                              # http://<vm-ip>:8000/docs
+# laptop: infrastructure as code (see docs/INFRA.md)
+export VULTR_API_KEY=...
+cp infra/terraform/terraform.tfvars.example infra/terraform/terraform.tfvars   # set admin_cidrs
+make tf-init tf-plan tf-apply          # VPC + firewall + VM + inference subscription
+make tf-sync tf-bootstrap tf-env       # code, hardening, jail, gVisor, inference key
+
+# on the VM
+make check-models                      # which models do tool calling / vision
+make smoke                             # sandbox + containment probes must all be blocked
+make api                               # then `make tf-tunnel` from the laptop -> localhost:8000/docs
 ```
 
 ## Status

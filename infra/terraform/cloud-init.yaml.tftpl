@@ -1,0 +1,49 @@
+#cloud-config
+# Rendered by Terraform. Contains NO secrets (user-data is readable via the
+# instance metadata service, which the sandbox jail blocks).
+
+users:
+  - name: ${admin_user}
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    lock_passwd: true
+    ssh_authorized_keys:
+      - ${ssh_pubkey}
+
+disable_root: true
+ssh_pwauth: false
+
+package_update: true
+package_upgrade: true
+packages: [git, make, curl, jq, rsync, ca-certificates]
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/10-ioc-hardening.conf
+    permissions: "0644"
+    content: |
+      PermitRootLogin no
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      AllowUsers ${admin_user}
+  - path: /etc/ioc-sentinel/provision.env
+    permissions: "0644"
+    content: |
+      REPO_DIR=${repo_dir}
+      APP_USER=${admin_user}
+      WITH_GVISOR=${enable_gvisor ? "1" : "0"}
+      VPC_CIDR=${vpc_cidr}
+
+runcmd:
+  - systemctl restart ssh
+  - mkdir -p ${repo_dir}
+  - chown ${admin_user}:${admin_user} ${repo_dir}
+  - [bash, -c, "ip -4 -o addr show | tee /var/log/ioc-network.log"]
+%{ if repo_url != "" ~}
+  - [sudo, -u, ${admin_user}, git, clone, --branch, ${repo_ref}, ${repo_url}, ${repo_dir}]
+  - [bash, -c, "set -a; . /etc/ioc-sentinel/provision.env; set +a; ${repo_dir}/infra/vm/bootstrap.sh > /var/log/ioc-bootstrap.log 2>&1"]
+%{ else ~}
+  - [bash, -c, "echo 'repo_url empty: run make tf-sync && make tf-bootstrap from your laptop' > /var/log/ioc-bootstrap.log"]
+%{ endif ~}
+
+final_message: "ioc-sentinel cloud-init finished after $UPTIME seconds"

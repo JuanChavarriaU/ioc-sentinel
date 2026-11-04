@@ -2,7 +2,7 @@ SHELL := /bin/bash
 PY ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 URL ?= https://example.com
 
-.PHONY: help bootstrap gvisor jail jail-status jail-down sandbox-image check-models scan smoke api traps
+.PHONY: tf-init tf-plan tf-apply tf-destroy tf-sync tf-bootstrap tf-env tf-status tf-tunnel tf-ssh help bootstrap gvisor jail jail-status jail-down sandbox-image check-models scan smoke api traps
 
 help:
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-14s\033[0m %s\n",$$1,$$2}'
@@ -39,3 +39,36 @@ api: ## run the FastAPI orchestrator on :8000
 
 traps: ## serve demo trap pages on :8088 (use with LAB_ALLOW=172.30.0.1:8088 make jail)
 	cd demo/traps && head -c 4096 /dev/urandom > invoice.bin && python3 -m http.server 8088
+
+# ---------------------------------------------------------------- Terraform (laptop)
+TF := terraform -chdir=infra/terraform
+
+tf-init: ## terraform init (needs VULTR_API_KEY exported)
+	$(TF) init
+
+tf-plan: ## terraform plan
+	$(TF) plan -out=tfplan
+
+tf-apply: ## apply the saved plan: VPC, firewall, VM, inference subscription
+	$(TF) apply tfplan
+
+tf-destroy: ## tear everything down (stops credit burn)
+	$(TF) destroy
+
+tf-sync: ## rsync this repo to the VM
+	./scripts/tf-remote.sh sync
+
+tf-bootstrap: ## run infra/vm/bootstrap.sh on the VM
+	./scripts/tf-remote.sh bootstrap
+
+tf-env: ## push the inference API key into the VM .env over SSH
+	./scripts/tf-remote.sh env
+
+tf-status: ## cloud-init / bootstrap / network status on the VM
+	./scripts/tf-remote.sh status
+
+tf-tunnel: ## localhost:8000 -> VM API
+	./scripts/tf-remote.sh tunnel
+
+tf-ssh: ## ssh into the VM
+	ssh $$($(TF) output -raw admin_user)@$$($(TF) output -raw public_ip)

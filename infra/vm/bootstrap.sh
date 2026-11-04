@@ -54,6 +54,9 @@ step "Host firewall (ufw): SSH + HTTP(S) only"
 ufw allow OpenSSH
 ufw allow 80/tcp
 ufw allow 443/tcp
+if [[ -n "${VPC_CIDR:-}" ]]; then
+  ufw allow from "$VPC_CIDR" comment "ioc-sentinel VPC"   # control plane <-> future workers
+fi
 ufw --force enable
 
 step "Jail network for sandboxes"
@@ -69,6 +72,10 @@ docker build -t ioc-sentinel/sandbox-browser:latest "$REPO_DIR/sandbox/browser"
 step "API virtualenv"
 sudo -u "$APP_USER" bash -c "cd '$REPO_DIR' && python3 -m venv .venv && .venv/bin/pip install -q -r apps/api/requirements.txt"
 [[ -f "$REPO_DIR/.env" ]] || sudo -u "$APP_USER" cp "$REPO_DIR/.env.example" "$REPO_DIR/.env"
+chmod 600 "$REPO_DIR/.env"
+if [[ "$WITH_GVISOR" == "1" ]] && command -v runsc >/dev/null; then
+  sed -i 's/^SANDBOX_RUNTIME=.*/SANDBOX_RUNTIME=runsc/' "$REPO_DIR/.env"
+fi
 
 step "Done"
 cat <<EOF

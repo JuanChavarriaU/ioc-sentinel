@@ -4,7 +4,11 @@ Objetivo del día: una VM en Vultr donde `make smoke` pase. Es decir, el sandbox
 devuelve screenshot + HAR + observaciones, **todos los probes de contención salen bloqueados**
 y no queda ningún contenedor vivo.
 
-## 1. Crear la VM (consola Vultr)
+## 1. Crear la VM
+
+**Recomendado: Terraform**, ver `docs/INFRA.md` (`make tf-init tf-plan tf-apply tf-sync tf-bootstrap tf-env`). Eso cubre los pasos 1 y 2, y la key del paso 3. Lo de abajo es el camino manual por consola.
+
+### Manual (consola Vultr)
 
 - Products → Compute → **Cloud Compute** (Shared CPU o Regular Performance).
 - Ubuntu **24.04 LTS x64**. Mínimo **2 vCPU / 4 GB** (Chromium + Docker build). Región: Miami o Atlanta (menor latencia desde Panamá).
