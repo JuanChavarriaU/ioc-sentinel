@@ -40,8 +40,9 @@ created and destroyed with one command (`make up` / `make down`).
 `docs/media/cover.png` (1600x900, 16:9). Fuente editable: `docs/media/cover.html`.
 
 ### Video presentation ✅
-`docs/media/demo.mp4` (52 s, 1440x810, subtitulado, sin audio): demo real contra la URL pública, con el Containment Log (5 probes `blocked`) en pantalla.
-Súbanlo a YouTube/Vimeo como *unlisted* y pongan ese link en el formulario. Si quieren voz, graben encima con el guion de abajo.
+<https://youtu.be/DNDXzURDEQs>
+
+Archivo fuente en el repo: `docs/media/demo.mp4` (52 s, subtitulado, sin audio), con el momento de contención (5 probes `blocked`).
 
 ### Slide presentation ✅
 `docs/slides/index.html` (6 slides, 16:9, flechas para navegar, `E` para editar). Para el formulario: exporten a PDF

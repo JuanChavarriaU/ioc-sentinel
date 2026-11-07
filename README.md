@@ -2,6 +2,10 @@
 
 ![IoC Sentinel: an agent that investigates suspicious URLs inside a jailed Vultr sandbox](docs/media/cover.png)
 
+[![Watch the demo video](https://img.youtube.com/vi/DNDXzURDEQs/hqdefault.jpg)](https://youtu.be/DNDXzURDEQs)
+
+**▶ [Watch the demo video](https://youtu.be/DNDXzURDEQs)**
+
 **An agent that investigates suspicious domains and produces Indicator-of-Compromise reports - without ever letting the suspicious content touch anything that matters.**
 
 Built for the **Vultr Agent Rush Hackathon - Track 01 · Blast Radius Zero**.
