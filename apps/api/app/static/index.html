@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IoC Sentinel</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 3 4 8v8c0 7 5 11 12 13 7-2 12-6 12-13V8z' fill='%230b6e4f'/%3E%3C/svg%3E">
+<style>
+  :root{--bg:#f6f7f9;--card:#fff;--ink:#14181f;--mute:#5b6572;--line:#e1e5ea;--accent:#0b6e4f;
+        --bad:#b42318;--warn:#b54708;--ok:#0b6e4f;--code:#f0f2f5}
+  @media (prefers-color-scheme:dark){:root{--bg:#0e1116;--card:#171b22;--ink:#e8ecf1;--mute:#98a2b3;--line:#2a313b;
+        --accent:#3ccf91;--bad:#ff6b5e;--warn:#ffa94d;--ok:#3ccf91;--code:#10141a}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+  .wrap{max-width:1080px;margin:0 auto;padding:20px 16px 60px}
+  header{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+  h1{font-size:22px;margin:0} .sub{color:var(--mute);font-size:13px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px}
+  h2{font-size:14px;text-transform:uppercase;letter-spacing:.05em;color:var(--mute);margin:0 0 10px}
+  form{display:flex;gap:8px;flex-wrap:wrap}
+  input[type=text]{flex:1 1 280px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
+  button{padding:10px 16px;border:0;border-radius:8px;background:var(--accent);color:#fff;font:inherit;font-weight:600;cursor:pointer}
+  @media (prefers-color-scheme:dark){button{color:#06130d}}
+  button:disabled{opacity:.5;cursor:wait} button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px} @media(max-width:760px){.grid{grid-template-columns:1fr}}
+  .pill{display:inline-block;padding:2px 10px;border-radius:99px;font-weight:700;font-size:13px;border:1px solid currentColor}
+  .malicious{color:var(--bad)} .suspicious{color:var(--warn)} .benign,.no_indicators{color:var(--ok)} .inconclusive{color:var(--mute)}
+  table{width:100%;border-collapse:collapse;font-size:13px} th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top;word-break:break-all}
+  th{color:var(--mute);font-weight:600}
+  .log{background:var(--code);border-radius:8px;padding:10px;font:12px/1.6 ui-monospace,Menlo,monospace;max-height:340px;overflow:auto}
+  .log div{white-space:pre-wrap;word-break:break-all} .src-host{color:#6e8efb} .src-sandbox{color:var(--warn)} .src-agent{color:var(--accent)}
+  .blocked{color:var(--ok)} .reach{color:var(--bad);font-weight:700}
+  img.shot{width:100%;border:1px solid var(--line);border-radius:8px}
+  ul{margin:6px 0 0;padding-left:20px} .muted{color:var(--mute)} .hidden{display:none}
+  .bar{height:8px;background:var(--code);border-radius:99px;overflow:hidden;margin-top:6px}.bar>i{display:block;height:100%;background:var(--accent)}
+  .notice{border-left:3px solid var(--warn);padding:6px 10px;background:var(--code);border-radius:4px;font-size:13px}
+  .spin{display:inline-block;width:12px;height:12px;border:2px solid var(--mute);border-top-color:transparent;border-radius:50%;animation:s 1s linear infinite;margin-right:6px}
+  @keyframes s{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>IoC Sentinel</h1>
+    <span class="sub">Investiga dominios sospechosos sin exponer nada que importe · Blast Radius Zero</span>
+  </header>
+
+  <div class="card">
+    <form id="f">
+      <input id="url" type="text" placeholder="https://dominio-sospechoso.example" autocomplete="off" required>
+      <button id="go" type="submit">Investigar</button>
+    </form>
+    <div id="status" class="muted" style="margin-top:8px"></div>
+  </div>
+
+  <div id="out" class="hidden">
+    <div class="grid">
+      <div class="card">
+        <h2>Veredicto del agente</h2>
+        <div><span id="verdict" class="pill"></span> <span id="conf" class="muted"></span></div>
+        <p id="summary"></p>
+        <ul id="findings"></ul>
+        <div id="inj" class="notice hidden" style="margin-top:10px">⚠ El sitio intentó inyectar instrucciones al agente. Se trató como dato y se ignoró.</div>
+      </div>
+      <div class="card">
+        <h2>Puntuación heurística (determinista)</h2>
+        <div><span id="hverdict" class="pill"></span> <b id="hscore"></b>/100</div>
+        <div class="bar"><i id="hbar" style="width:0"></i></div>
+        <table style="margin-top:10px"><tbody id="signals"></tbody></table>
+        <div class="muted" style="font-size:12px;margin-top:8px">Modelo: <span id="model"></span> · <span id="dur"></span> s</div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card"><h2>Captura (tomada dentro del sandbox)</h2><img id="shot" class="shot" alt="screenshot del sitio"></div>
+      <div class="card">
+        <h2>Containment Log</h2>
+        <div id="log" class="log"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Indicadores de compromiso</h2>
+      <table><thead><tr><th>Tipo</th><th>Valor</th><th>Categoría</th><th>Nota</th></tr></thead><tbody id="iocs"></tbody></table>
+    </div>
+
+    <div class="card">
+      <h2>Exportar reporte</h2>
+      <p class="muted" style="margin-top:0">Un analista debe revisar y aprobar el resultado antes de exportarlo.</p>
+      <label><input type="checkbox" id="approve"> Revisé la evidencia y apruebo exportar este reporte</label>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <button id="dlj" class="ghost" disabled>Descargar JSON</button>
+        <button id="dlh" class="ghost" disabled>Descargar HTML</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Everything coming from the API is untrusted (it originates from a hostile site): only textContent, never innerHTML.
+const $ = (id) => document.getElementById(id);
+let current = null;
+
+function el(tag, text, cls) { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; }
+function setPill(node, v) { node.textContent = v; node.className = "pill " + v; }
+
+$("f").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const btn = $("go"), st = $("status");
+  btn.disabled = true; $("out").classList.add("hidden"); $("approve").checked = false; syncExport();
+  st.textContent = "";
+  const sp = el("span", "", "spin"); st.append(sp, "El agente está investigando dentro del sandbox (10–60 s)…");
+  try {
+    const r = await fetch("/api/investigations", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({url: $("url").value})});
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || ("HTTP " + r.status));
+    current = data; render(data); st.textContent = "";
+  } catch (e) { st.textContent = "Error: " + e.message; }
+  btn.disabled = false;
+});
+
+function render(d) {
+  const a = d.agent || {}, h = d.heuristic || {};
+  setPill($("verdict"), a.verdict || "inconclusive");
+  $("conf").textContent = a.confidence != null ? "confianza " + Math.round(a.confidence * 100) + "%" : "";
+  $("summary").textContent = a.summary || "";
+  const fl = $("findings"); fl.replaceChildren(...(a.findings || []).map((f) => el("li", f)));
+  $("inj").classList.toggle("hidden", !a.prompt_injection_detected);
+  setPill($("hverdict"), h.verdict || "no_indicators"); $("hscore").textContent = h.score ?? 0;
+  $("hbar").style.width = (h.score || 0) + "%";
+  $("signals").replaceChildren(...(h.signals || []).map((s) => { const tr = el("tr"); tr.append(el("td", "+" + s.points), el("td", s.signal), el("td", s.detail)); return tr; }));
+  $("model").textContent = d.model; $("dur").textContent = d.duration_s;
+  if (d.scan_ids && d.scan_ids[0]) $("shot").src = "/api/scans/" + encodeURIComponent(d.scan_ids[0]) + "/screenshot.png"; else $("shot").removeAttribute("src");
+
+  const t0 = (d.containment_log[0] || {}).t || 0;
+  $("log").replaceChildren(...d.containment_log.map((e) => {
+    const row = el("div"); const { t, src, kind, ...rest } = e;
+    row.append(el("span", "+" + (t - t0).toFixed(2).padStart(6) + "s ", "muted"), el("span", "[" + src.padEnd(7) + "] ", "src-" + src), el("span", kind.padEnd(20)));
+    if (kind === "containment_probe") {
+      const blocked = String(rest.status).startsWith("blocked");
+      row.append(el("span", rest.target + " " + rest.addr + " → " + rest.status, blocked ? "blocked" : "reach"));
+    } else row.append(el("span", JSON.stringify(rest).slice(0, 160), "muted"));
+    return row;
+  }));
+  $("iocs").replaceChildren(...(d.iocs || []).map((i) => { const tr = el("tr"); tr.append(el("td", i.type), el("td", i.value), el("td", i.category), el("td", i.note)); return tr; }));
+  $("out").classList.remove("hidden");
+}
+
+function syncExport() { const on = $("approve").checked && current; $("dlj").disabled = !on; $("dlh").disabled = !on; }
+$("approve").addEventListener("change", syncExport);
+
+function download(name, mime, text) {
+  const a = el("a"); a.href = URL.createObjectURL(new Blob([text], {type: mime})); a.download = name; a.click(); URL.revokeObjectURL(a.href);
+}
+$("dlj").addEventListener("click", () => download("ioc-report-" + current.investigation_id + ".json", "application/json", JSON.stringify(current, null, 2)));
+$("dlh").addEventListener("click", () => {
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+  const d = current, a = d.agent, h = d.heuristic;
+  const rows = d.iocs.map((i) => `<tr><td>${esc(i.type)}</td><td>${esc(i.value)}</td><td>${esc(i.category)}</td><td>${esc(i.note)}</td></tr>`).join("");
+  const html = `<!doctype html><meta charset="utf-8"><title>IoC report ${esc(d.url)}</title><style>body{font:14px system-ui;max-width:900px;margin:24px auto;padding:0 16px}td,th{border-bottom:1px solid #ddd;padding:4px 8px;text-align:left;word-break:break-all}</style>
+<h1>IoC Sentinel report</h1><p><b>Target:</b> ${esc(d.url)}<br><b>Agent verdict:</b> ${esc(a.verdict)} (${esc(a.confidence)})<br><b>Heuristic:</b> ${esc(h.verdict)} ${esc(h.score)}/100<br><b>Model:</b> ${esc(d.model)}</p>
+<p>${esc(a.summary)}</p><ul>${(a.findings || []).map((f) => `<li>${esc(f)}</li>`).join("")}</ul>
+<h2>Indicators of Compromise</h2><table><tr><th>Type</th><th>Value</th><th>Category</th><th>Note</th></tr>${rows}</table>`;
+  download("ioc-report-" + d.investigation_id + ".html", "text/html", html);
+});
+</script>
+</body>
+</html>

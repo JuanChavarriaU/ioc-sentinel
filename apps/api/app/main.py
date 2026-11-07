@@ -39,6 +39,11 @@ def _scan_dir(scan_id: str) -> Path:
     return d
 
 
+@app.get("/", include_in_schema=False)
+def dashboard():
+    return FileResponse(Path(__file__).parent / "static" / "index.html", media_type="text/html")
+
+
 @app.get("/healthz")
 def healthz():
     return {"ok": True, "sandbox_image": settings.sandbox_image,
