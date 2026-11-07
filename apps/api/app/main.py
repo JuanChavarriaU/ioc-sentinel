@@ -26,9 +26,9 @@ from .sandbox.runner import run_in_sandbox, save_artifacts
 from .sandbox.url_guard import UnsafeTarget, normalize_target
 
 app = FastAPI(title="IoC Sentinel", version="0.2.0")
-WEB_DIR = Path(__file__).resolve().parents[3] / "web"  # static front end (also deployable on its own, e.g. Cloudflare Pages)
+WEB_DIR = Path(__file__).resolve().parents[3] / "web"  # static front end (also deployable on its own)
 
-# The front end may live on another origin (Cloudflare Pages). Only the origins listed in CORS_ORIGINS may call the API
+# The front end may live on another origin (optional). Only the origins listed in CORS_ORIGINS may call the API
 # from a browser; empty = same-origin only. No cookies/credentials are used, so allow_credentials stays False.
 if settings.cors_origins:
     app.add_middleware(

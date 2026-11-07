@@ -37,7 +37,7 @@ case "${1:-}" in
         && sed -i \"s|^VULTR_INFERENCE_API_KEY=.*|VULTR_INFERENCE_API_KEY=\$k|\" \$f \
         || echo \"VULTR_INFERENCE_API_KEY=\$k\" >> \$f
       echo 'VULTR_INFERENCE_API_KEY written to' \$f"
-    # Not a secret: allowed browser origins for a front end hosted elsewhere (e.g. Cloudflare Pages).
+    # Not a secret: allowed browser origins for a front end hosted elsewhere.
     if [[ -n "${CORS_ORIGINS:-}" ]]; then
       "${SSH[@]}" "f=$DIR/.env; grep -q '^CORS_ORIGINS=' \$f && sed -i 's|^CORS_ORIGINS=.*|CORS_ORIGINS=${CORS_ORIGINS}|' \$f || echo 'CORS_ORIGINS=${CORS_ORIGINS}' >> \$f; echo 'CORS_ORIGINS set'"
     fi

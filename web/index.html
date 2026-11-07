@@ -269,7 +269,7 @@
 <script src="config.js"></script>
 <script>
 "use strict";
-// Backend base URL. "" = same origin (served by the API itself). On Cloudflare Pages config.js sets it to the Vultr API.
+// Backend base URL. "" = same origin (served by the API itself). config.js can point it at another API origin.
 const API = (window.IOC_API_BASE || "").replace(/\/$/, "");
 // All API data is attacker-influenced (it comes from a hostile page): only textContent / attributes, never innerHTML.
 const $ = (id) => document.getElementById(id);
