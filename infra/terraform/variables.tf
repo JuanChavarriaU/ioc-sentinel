@@ -34,12 +34,6 @@ variable "admin_user" {
   default     = "juanjo"
 }
 
-variable "extra_admins" {
-  description = "More admins created on first boot with the same powers (sudo + SSH): { username = \"ssh public key\" }. Add their public IPs to admin_cidrs too."
-  type        = map(string)
-  default     = {}
-}
-
 variable "admin_cidrs" {
   description = "CIDRs allowed to SSH (and reach :8000 when expose_api_port). Use your public IP /32."
   type        = list(string)
