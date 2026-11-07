@@ -50,9 +50,6 @@ status: ## show VM, public URL and health
 down: ## DESTROY everything:  make down CONFIRM=yes
 	CONFIRM=$(CONFIRM) ./scripts/deploy.sh down
 
-release-ip: ## also delete the persistent public IP (URL will change):  make release-ip CONFIRM=yes
-	CONFIRM=$(CONFIRM) ./scripts/deploy.sh release-ip
-
 # ---------------------------------------------------------------- Terraform (laptop)
 TF := terraform -chdir=infra/terraform
 

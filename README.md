@@ -6,7 +6,7 @@ Built for the **Vultr Agent Rush Hackathon - Track 01 · Blast Radius Zero**.
 
 > An agent that only chats is a demo; an agent that executes safely is a product.
 
-- **Live demo:** <https://104-207-147-218.sslip.io/> (host name = the persistent Vultr reserved IP, so the URL survives `make down` / `make up`, see [Persistent URL](#persistent-url))
+- **Live demo:** <https://104-207-147-218.sslip.io/> (the host name encodes the VM IP; it changes if you redeploy, see [Deploy](#deploy-and-tear-down-one-command))
 - **Test fixture (public, harmless):** <https://pander64.github.io/traps/> - [repo](https://github.com/Pander64/traps)
 - **Architecture deep-dive (Spanish):** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
@@ -97,13 +97,6 @@ sandbox image, venv; gVisor only if `enable_gvisor = true`) → write the infere
 smoke test (containment probes must all be blocked) → prints the HTTPS URL (`<ip-with-dashes>.sslip.io`, no DNS needed).
 It is idempotent and works with a private or public repo (the code is rsynced, not cloned).
 Cost: ~US$20/month prorated hourly for the VM; inference is pay-per-use.
-
-### Persistent URL
-
-`make up` reserves a Vultr IPv4 (label `ioc-sentinel-persistent`) **outside the Terraform state** and attaches it to the VM as its main IP.
-`make down` destroys everything else but keeps that IP, so the next `make up` comes back on the **same IP and the same
-`https://<ip-with-dashes>.sslip.io` URL** (Caddy re-issues the certificate). Want a real domain? Point an A record at the reserved IP once
-and run `DOMAIN=sentinel.example.com make up`. To delete the IP too (stops its ~US$3/month): `make release-ip CONFIRM=yes`.
 
 ### Front end on Cloudflare Pages (optional split)
 

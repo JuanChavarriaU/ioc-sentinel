@@ -56,9 +56,9 @@ o publíquenlo con GitHub Pages / Vercel.
 |---|---|
 | Public GitHub repository | <https://github.com/JuanChavarriaU/ioc-sentinel> (PUBLIC ✅, verificado) |
 | Demo application platform | Vultr Cloud Compute (Ubuntu 24.04, `vc2-2c-4gb`) + Caddy TLS |
-| Application URL | <https://104-207-147-218.sslip.io/> (`/healthz` → 200 ✅ al momento de escribir esto) |
+| Application URL | URL de Cloudflare Pages (`https://<proyecto>.pages.dev` o dominio propio). API: <https://104-207-147-218.sslip.io/> |
 
-> La URL ahora es persistente: `make up` usa una IP reservada de Vultr que `make down` conserva (ver README, *Persistent URL*). La VM actual aún usa la IP anterior; el primer `make up` con este cambio fija la nueva IP definitiva y a partir de ahí no cambia más.
+> La URL del API codifica la IP de la VM (cambia si se recrea la infra). El front irá en Cloudflare Pages con dominio propio `*.pages.dev`, así que el link del formulario es el de Pages y solo `API_BASE` debe apuntar a la IP actual del API.
 
 ### Vultr-specific documentation
 Todo está en el [README](../README.md): secciones **Architecture**, **Blast-radius controls**, **Vultr services used**,

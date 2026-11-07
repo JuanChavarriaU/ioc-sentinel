@@ -4,12 +4,7 @@
 #   export VULTR_API_KEY=...            # Vultr -> Account -> API (allow your IP in Access Control)
 #   scripts/deploy.sh up                # create VPC+firewall+VM+inference, install, harden, publish HTTPS, smoke test
 #   scripts/deploy.sh status            # IP, URL, health
-#   CONFIRM=yes scripts/deploy.sh down  # destroy VM, VPC, firewall, inference (the persistent IP is KEPT, so the URL survives)
-#   CONFIRM=yes scripts/deploy.sh release-ip   # also delete the persistent IP (after this the URL changes)
-#
-# Persistent URL: `up` reserves a Vultr IPv4 labelled "$IP_LABEL" (or reuses it) and attaches it to the VM as its
-# main IP. The URL is https://<ip-with-dashes>.sslip.io, or https://$DOMAIN if you set DOMAIN=sentinel.example.com
-# (point its A record at the reserved IP once; it never changes). A reserved IP costs ~US$3/month while unattached.
+#   CONFIRM=yes scripts/deploy.sh down  # destroy EVERYTHING (stops billing)
 #
 # Works with a private or public repo: the code is rsynced from this checkout (no git clone on the VM).
 # Needs on your laptop: terraform, ssh, rsync, curl. If your SSH key has a passphrase: `ssh-add <key>` first.
@@ -22,8 +17,6 @@ SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=
 
 log() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
-IP_LABEL="${IP_LABEL:-ioc-sentinel-persistent}"
-VULTR_API="https://api.vultr.com/v2"
 tfo() { terraform -chdir="$TF_DIR" output -raw "$1"; }
 
 need() { for c in "$@"; do command -v "$c" >/dev/null || die "missing dependency: $c"; done; }
@@ -50,30 +43,6 @@ EOF
   echo "wrote $TFVARS (SSH allowed only from ${ip}/32)"
 }
 
-vultr_api() { curl -fsS -H "Authorization: Bearer $VULTR_API_KEY" -H "Content-Type: application/json" "$@"; }
-
-tf_region() { sed -n 's/^region *= *"\(.*\)".*/\1/p' "$TFVARS" | head -1; }
-
-# Prints "<id> <ip>" of the persistent reserved IP, creating it on first use.
-ensure_reserved_ip() {
-  local region found
-  region="$(tf_region)"; region="${region:-${REGION:-mia}}"
-  found="$(vultr_api "$VULTR_API/reserved-ips?per_page=500" | python3 -c '
-import json,sys
-label,region=sys.argv[1],sys.argv[2]
-for r in json.load(sys.stdin).get("reserved_ips",[]):
-    if r.get("label")==label and r.get("region")==region: print(r["id"],r["subnet"]); break
-' "$IP_LABEL" "$region")"
-  if [[ -z "$found" ]]; then
-    echo "creating reserved IP '$IP_LABEL' in $region" >&2
-    found="$(vultr_api -X POST "$VULTR_API/reserved-ips" -d "{\"region\":\"$region\",\"ip_type\":\"v4\",\"label\":\"$IP_LABEL\"}" \
-      | python3 -c 'import json,sys; r=json.load(sys.stdin)["reserved_ip"]; print(r["id"],r["subnet"])')"
-  fi
-  echo "$found"
-}
-
-site_host() { if [[ -n "${DOMAIN:-}" ]]; then echo "$DOMAIN"; else echo "${1//./-}.sslip.io"; fi; }
-
 wait_ssh() {
   local target="$1" i
   log "Waiting for SSH on $target (first boot + user creation)"
@@ -85,16 +54,9 @@ wait_ssh() {
 }
 
 cmd_up() {
-  need terraform ssh rsync curl python3
+  need terraform ssh rsync curl
   [[ -n "${VULTR_API_KEY:-}" ]] || die "export VULTR_API_KEY first (Vultr -> Account -> API)"
   [[ -f "$TFVARS" ]] || { log "No terraform.tfvars: generating one"; write_default_tfvars; }
-
-  log "Persistent public IP (label: $IP_LABEL)"
-  local rid rip
-  read -r rid rip < <(ensure_reserved_ip)
-  export TF_VAR_reserved_ip_id="$rid"
-  echo "reserved IP $rip (id $rid) - kept across destroy/up"
-  [[ -z "${DOMAIN:-}" ]] || echo "DOMAIN=$DOMAIN: make sure its A record points to $rip"
 
   log "Terraform: create VPC, firewall, VM, Serverless Inference"
   terraform -chdir="$TF_DIR" init -input=false -upgrade=false >/dev/null
@@ -114,12 +76,12 @@ cmd_up() {
   "$ROOT/scripts/tf-remote.sh" env
 
   log "Publish: Caddy (HTTPS) + ioc-api systemd service"
-  ssh "${SSH_OPTS[@]}" "$target" "cd $repo && sudo REPO_DIR=$repo APP_USER=$user ./infra/vm/public-endpoint.sh $(site_host "$ip")" | tail -3
+  ssh "${SSH_OPTS[@]}" "$target" "cd $repo && sudo REPO_DIR=$repo APP_USER=$user ./infra/vm/public-endpoint.sh" | tail -3
 
   log "Smoke test (containment probes must all be blocked)"
   ssh "${SSH_OPTS[@]}" "$target" "cd $repo && make smoke" | tail -14
 
-  local host; host="$(site_host "$ip")"
+  local host="${ip//./-}.sslip.io"
   for _ in $(seq 1 20); do
     [[ "$(curl -s -o /dev/null -w '%{http_code}' "https://$host/healthz")" == 200 ]] && break; sleep 6
   done
@@ -130,8 +92,8 @@ cmd_status() {
   need terraform curl
   local ip; ip="$(tfo public_ip 2>/dev/null)" || die "nothing deployed (no Terraform state)"
   echo "VM:  $(tfo ssh)"
-  echo "URL: https://$(site_host "$ip")/"
-  curl -s -m 10 "https://$(site_host "$ip")/healthz" || echo "(health check failed)"
+  echo "URL: https://${ip//./-}.sslip.io/"
+  curl -s -m 10 "https://${ip//./-}.sslip.io/healthz" || echo "(health check failed)"
   echo
 }
 
@@ -141,21 +103,12 @@ cmd_down() {
   [[ "${CONFIRM:-}" == yes ]] || die "this DESTROYS the VM, VPC, firewall and inference subscription. Re-run with CONFIRM=yes"
   log "Terraform destroy"
   terraform -chdir="$TF_DIR" destroy -input=false -auto-approve
-  log "Destroyed (VM, VPC, firewall, inference). The persistent IP '$IP_LABEL' was kept: the next 'up' reuses it and the URL stays the same."
-  echo "Delete it too (stops its ~US\$3/month): CONFIRM=yes scripts/deploy.sh release-ip"
-}
-
-cmd_release_ip() {
-  [[ -n "${VULTR_API_KEY:-}" ]] || die "export VULTR_API_KEY first"
-  [[ "${CONFIRM:-}" == yes ]] || die "this deletes the persistent IP; the URL will change on the next up. Re-run with CONFIRM=yes"
-  local id; id="$(ensure_reserved_ip | cut -d' ' -f1)"
-  vultr_api -X DELETE "$VULTR_API/reserved-ips/$id" && echo "released $id"
+  log "Destroyed. Billing stopped. Recreate anytime with: scripts/deploy.sh up"
 }
 
 case "${1:-}" in
   up) cmd_up ;;
   status) cmd_status ;;
   down) cmd_down ;;
-  release-ip) cmd_release_ip ;;
   *) sed -n '2,10p' "$0"; exit 2 ;;
 esac

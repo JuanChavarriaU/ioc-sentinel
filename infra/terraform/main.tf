@@ -118,7 +118,7 @@ resource "vultr_instance" "control_plane" {
   ssh_key_ids       = [vultr_ssh_key.admin.id]
   vpc_ids           = [vultr_vpc.main.id]
   firewall_group_id = vultr_firewall_group.control_plane.id
-  reserved_ip_id    = var.reserved_ip_id != "" ? var.reserved_ip_id : (var.use_reserved_ip ? vultr_reserved_ip.control_plane[0].id : null)
+  reserved_ip_id    = var.use_reserved_ip ? vultr_reserved_ip.control_plane[0].id : null
   enable_ipv6       = false # jail is IPv4-only; no v6 path to worry about
   backups           = "disabled"
   activation_email  = false
