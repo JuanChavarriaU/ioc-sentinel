@@ -15,6 +15,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -25,6 +26,19 @@ from .sandbox.runner import run_in_sandbox, save_artifacts
 from .sandbox.url_guard import UnsafeTarget, normalize_target
 
 app = FastAPI(title="IoC Sentinel", version="0.2.0")
+WEB_DIR = Path(__file__).resolve().parents[3] / "web"  # static front end (also deployable on its own, e.g. Cloudflare Pages)
+
+# The front end may live on another origin (Cloudflare Pages). Only the origins listed in CORS_ORIGINS may call the API
+# from a browser; empty = same-origin only. No cookies/credentials are used, so allow_credentials stays False.
+if settings.cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type"],
+        expose_headers=["Retry-After"],
+        max_age=600,
+    )
 SCANS = settings.data_dir / "scans"
 INVESTIGATIONS = settings.data_dir / "investigations"
 _SLOTS = asyncio.Semaphore(2)  # max concurrent agent investigations
@@ -47,7 +61,12 @@ def _scan_dir(scan_id: str) -> Path:
 
 @app.get("/", include_in_schema=False)
 def dashboard():
-    return FileResponse(Path(__file__).parent / "static" / "index.html", media_type="text/html")
+    return FileResponse(WEB_DIR / "index.html", media_type="text/html")
+
+
+@app.get("/config.js", include_in_schema=False)
+def front_config():
+    return FileResponse(WEB_DIR / "config.js", media_type="text/javascript")
 
 
 @app.get("/healthz")

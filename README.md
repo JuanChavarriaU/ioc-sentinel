@@ -105,6 +105,18 @@ Cost: ~US$20/month prorated hourly for the VM; inference is pay-per-use.
 `https://<ip-with-dashes>.sslip.io` URL** (Caddy re-issues the certificate). Want a real domain? Point an A record at the reserved IP once
 and run `DOMAIN=sentinel.example.com make up`. To delete the IP too (stops its ~US$3/month): `make release-ip CONFIRM=yes`.
 
+### Front end on Cloudflare Pages (optional split)
+
+The dashboard is a static, no-build page in `web/` (`index.html` + `config.js`). The API can still serve it itself (same origin, default),
+or you can host it on **Cloudflare Pages** and keep the API on Vultr:
+
+1. **Pages project:** connect this repo, *Build output directory* = `web`, *Build command* =
+   `echo "window.IOC_API_BASE='$API_BASE';" > web/config.js`, and set the env var `API_BASE` = your API URL
+   (e.g. `https://104-207-147-218.sslip.io` or your DuckDNS domain, no trailing slash).
+2. **Allow that origin in the API:** `CORS_ORIGINS=https://<project>.pages.dev make up`
+   (or add `CORS_ORIGINS=...` to `.env` on the VM and `sudo systemctl restart ioc-api`). Several origins: comma-separated.
+3. The browser then calls the Vultr API directly (CORS, no cookies). Rate limiting still sees the real client IP.
+
 Manual steps and details: [docs/INFRA.md](docs/INFRA.md), [docs/DIA1.md](docs/DIA1.md).
 
 ## API
@@ -125,7 +137,7 @@ Manual steps and details: [docs/INFRA.md](docs/INFRA.md), [docs/DIA1.md](docs/DI
 apps/api/app/agent/        tool-calling loop on Vultr Inference + host-side tools
 apps/api/app/ioc/          deterministic IoC extraction + risk score
 apps/api/app/sandbox/      docker-py runner (hardening), URL guard
-apps/api/app/static/       analyst dashboard (no build step)
+web/                       analyst dashboard (static, no build step; served by the API or by Cloudflare Pages)
 apps/api/app/ratelimit.py  per-IP sliding-window limiter
 sandbox/browser/           sandbox image: Playwright worker (one URL in, one JSON line out)
 infra/terraform/           Vultr: VPC, firewall, VM (cloud-init), Serverless Inference

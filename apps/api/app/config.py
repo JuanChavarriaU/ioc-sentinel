@@ -33,6 +33,11 @@ class Settings:
     rate_limit_per_ip: int = int(_env("RATE_LIMIT_PER_IP", "5"))
     rate_window_s: int = int(_env("RATE_WINDOW_S", "600"))
 
+    # --- Browser access from a separately hosted front end (comma-separated origins, e.g. https://ioc.pages.dev) ---
+    cors_origins: list[str] = field(
+        default_factory=lambda: [o.strip().rstrip("/") for o in (_env("CORS_ORIGINS", "") or "").split(",") if o.strip()]
+    )
+
     # --- Sandbox ---
     sandbox_image: str = _env("SANDBOX_IMAGE", "ioc-sentinel/sandbox-browser:latest")
     sandbox_network: str = _env("SANDBOX_NETWORK", "ioc-jail")
