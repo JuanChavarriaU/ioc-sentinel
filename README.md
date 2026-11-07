@@ -105,17 +105,18 @@ Cost: ~US$20/month prorated hourly for the VM; inference is pay-per-use.
 `https://<ip-with-dashes>.sslip.io` URL** (Caddy re-issues the certificate). Want a real domain? Point an A record at the reserved IP once
 and run `DOMAIN=sentinel.example.com make up`. To delete the IP too (stops its ~US$3/month): `make release-ip CONFIRM=yes`.
 
-### Front end on Cloudflare Pages (optional split)
+### Front end on GitHub Pages (optional split)
 
 The dashboard is a static, no-build page in `web/` (`index.html` + `config.js`). The API can still serve it itself (same origin, default),
-or you can host it on **Cloudflare Pages** and keep the API on Vultr:
+or the front end can live on **GitHub Pages** while the API stays on Vultr:
 
-1. **Pages project:** connect this repo, *Build output directory* = `web`, *Build command* =
-   `echo "window.IOC_API_BASE='$API_BASE';" > web/config.js`, and set the env var `API_BASE` = your API URL
-   (e.g. `https://104-207-147-218.sslip.io` or your DuckDNS domain, no trailing slash).
-2. **Allow that origin in the API:** `CORS_ORIGINS=https://<project>.pages.dev make up`
-   (or add `CORS_ORIGINS=...` to `.env` on the VM and `sudo systemctl restart ioc-api`). Several origins: comma-separated.
-3. The browser then calls the Vultr API directly (CORS, no cookies). Rate limiting still sees the real client IP.
+1. **Once:** repo *Settings → Pages → Source = GitHub Actions*. The workflow `.github/workflows/pages.yml` then publishes `web/` on every push
+   to `main` / `feat/agent` at `https://<user>.github.io/ioc-sentinel/`. It writes `web/config.js` pointing at the API
+   (repo variable `API_BASE`, default `https://104-207-147-218.sslip.io`).
+2. **Allow that origin in the API:** `make up` already sets `CORS_ORIGINS=https://juanchavarriau.github.io`. On a running VM:
+   `echo 'CORS_ORIGINS=https://juanchavarriau.github.io' >> /opt/ioc-sentinel/.env && sudo systemctl restart ioc-api`.
+3. The browser calls the Vultr API directly (CORS, no cookies). Rate limiting still sees the real client IP.
+   Any other static host (Cloudflare Pages, Netlify) works the same way: publish `web/` and write `config.js`.
 
 Manual steps and details: [docs/INFRA.md](docs/INFRA.md), [docs/DIA1.md](docs/DIA1.md).
 
