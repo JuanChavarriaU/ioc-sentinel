@@ -6,7 +6,7 @@ Built for the **Vultr Agent Rush Hackathon - Track 01 · Blast Radius Zero**.
 
 > An agent that only chats is a demo; an agent that executes safely is a product.
 
-- **Live demo:** <https://45-77-162-181.sslip.io/> (the host name encodes the VM IP; it changes if you redeploy, see [Deploy](#deploy-and-tear-down-one-command))
+- **Live demo:** <https://104-207-147-218.sslip.io/> (the host name encodes the VM IP; it changes if you redeploy, see [Deploy](#deploy-and-tear-down-one-command))
 - **Test fixture (public, harmless):** <https://pander64.github.io/traps/> - [repo](https://github.com/Pander64/traps)
 - **Architecture deep-dive (Spanish):** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
