@@ -7,6 +7,7 @@ Day 2 adds the agent loop (Vultr Serverless Inference + host-side threat-intel t
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from pathlib import Path
@@ -24,6 +25,7 @@ from .sandbox.url_guard import UnsafeTarget, normalize_target
 app = FastAPI(title="IoC Sentinel", version="0.2.0")
 SCANS = settings.data_dir / "scans"
 INVESTIGATIONS = settings.data_dir / "investigations"
+_SLOTS = asyncio.Semaphore(2)  # max concurrent agent investigations
 
 
 class ScanRequest(BaseModel):
@@ -68,10 +70,14 @@ async def create_investigation(req: ScanRequest):
         target = normalize_target(req.url)
     except UnsafeTarget as exc:
         raise HTTPException(400, str(exc))
-    try:
-        result = await run_in_threadpool(investigate, target)
-    except RuntimeError as exc:  # e.g. inference key not configured
-        raise HTTPException(503, str(exc))
+    # Public demo: cap concurrent runs (each = 1 sandbox container + LLM spend).
+    if _SLOTS.locked():
+        raise HTTPException(429, "Too many investigations running; retry in a few seconds.")
+    async with _SLOTS:
+        try:
+            result = await run_in_threadpool(investigate, target)
+        except RuntimeError as exc:  # e.g. inference key not configured
+            raise HTTPException(503, str(exc))
     inv_id = uuid.uuid4().hex[:12]
     result["investigation_id"] = inv_id
     d = INVESTIGATIONS / inv_id
