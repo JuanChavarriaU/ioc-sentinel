@@ -8,6 +8,7 @@ Day 2 adds the agent loop (Vultr Serverless Inference + host-side threat-intel t
 from __future__ import annotations
 
 import json
+import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -15,12 +16,14 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from .agent.loop import investigate
 from .config import settings
 from .sandbox.runner import run_in_sandbox, save_artifacts
 from .sandbox.url_guard import UnsafeTarget, normalize_target
 
-app = FastAPI(title="IoC Sentinel", version="0.1.0")
+app = FastAPI(title="IoC Sentinel", version="0.2.0")
 SCANS = settings.data_dir / "scans"
+INVESTIGATIONS = settings.data_dir / "investigations"
 
 
 class ScanRequest(BaseModel):
@@ -51,6 +54,35 @@ async def create_scan(req: ScanRequest):
     run = await run_in_threadpool(run_in_sandbox, target)
     save_artifacts(run)
     return json.loads((SCANS / run.scan_id / "result.json").read_text())
+
+
+@app.post("/api/investigations")
+async def create_investigation(req: ScanRequest):
+    """Full agent run: LLM (Vultr Serverless Inference) + sandboxed scan + host-side threat intel."""
+    try:
+        target = normalize_target(req.url)
+    except UnsafeTarget as exc:
+        raise HTTPException(400, str(exc))
+    try:
+        result = await run_in_threadpool(investigate, target)
+    except RuntimeError as exc:  # e.g. inference key not configured
+        raise HTTPException(503, str(exc))
+    inv_id = uuid.uuid4().hex[:12]
+    result["investigation_id"] = inv_id
+    d = INVESTIGATIONS / inv_id
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "investigation.json").write_text(json.dumps(result, indent=2, default=str))
+    return result
+
+
+@app.get("/api/investigations/{inv_id}")
+def get_investigation(inv_id: str):
+    if not inv_id.isalnum():
+        raise HTTPException(400, "bad investigation id")
+    p = INVESTIGATIONS / inv_id / "investigation.json"
+    if not p.exists():
+        raise HTTPException(404, "investigation not found")
+    return json.loads(p.read_text())
 
 
 @app.get("/api/scans/{scan_id}")

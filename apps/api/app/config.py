@@ -17,7 +17,12 @@ class Settings:
     # --- Vultr Serverless Inference (host only) ---
     inference_base_url: str = _env("VULTR_INFERENCE_BASE_URL", "https://api.vultrinference.com/v1")
     inference_api_key: str | None = _env("VULTR_INFERENCE_API_KEY")
-    agent_model: str = _env("AGENT_MODEL", "kimi-k2-instruct")
+    agent_model: str = _env("AGENT_MODEL", "qwen3.8-27b")
+
+    # --- Host-side threat intel (optional; tools degrade gracefully without keys) ---
+    abusech_auth_key: str | None = _env("ABUSECH_AUTH_KEY")
+    agent_max_steps: int = int(_env("AGENT_MAX_STEPS", "6"))
+    agent_max_scans: int = int(_env("AGENT_MAX_SCANS", "2"))
 
     # --- Sandbox ---
     sandbox_image: str = _env("SANDBOX_IMAGE", "ioc-sentinel/sandbox-browser:latest")
