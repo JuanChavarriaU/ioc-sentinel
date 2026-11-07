@@ -1,0 +1,37 @@
+<!doctype html><meta charset="utf-8"><title>cover</title>
+<style>
+*{box-sizing:border-box;margin:0}
+body{width:1600px;height:900px;background:#0b1620;color:#e8f1f5;font-family:Inter,system-ui,sans-serif;position:relative;overflow:hidden}
+.glow{position:absolute;inset:0;background:radial-gradient(900px 500px at 85% 10%,#0f6b52 0%,transparent 60%),radial-gradient(700px 500px at 0% 100%,#12384f 0%,transparent 60%)}
+.wrap{position:relative;padding:64px 72px;height:100%;display:grid;grid-template-columns:640px 1fr;gap:56px}
+.tag{font:600 18px/1 'JetBrains Mono',monospace;letter-spacing:.14em;color:#4fd1a5;text-transform:uppercase}
+h1{font-size:92px;line-height:.98;margin:22px 0 26px;letter-spacing:-.03em}
+h1 span{color:#4fd1a5}
+p.sub{font-size:28px;line-height:1.35;color:#b6c8d2}
+.badges{display:flex;gap:12px;margin-top:34px;flex-wrap:wrap}
+.b{border:1px solid #2c4a5a;background:#102532;padding:10px 16px;border-radius:999px;font:500 18px 'JetBrains Mono',monospace;color:#cfe3ec}
+.b.g{border-color:#4fd1a5;color:#4fd1a5}
+.right{display:flex;flex-direction:column;gap:22px;justify-content:center}
+.card{background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px #0008}
+.card img{display:block;width:100%}
+.lbl{font:600 15px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#7fa3b5;text-transform:uppercase;margin-bottom:8px}
+.row{display:grid;grid-template-columns:1fr 280px;gap:22px;align-items:end}
+.foot{position:absolute;left:72px;bottom:44px;font:500 20px 'JetBrains Mono',monospace;color:#7fa3b5}
+</style>
+<div class="glow"></div>
+<div class="wrap">
+ <div style="display:flex;flex-direction:column;justify-content:center">
+  <div class="tag">Vultr Agent Rush · Blast Radius Zero</div>
+  <h1>IoC<br><span>Sentinel</span></h1>
+  <p class="sub">An agent that investigates suspicious URLs and writes the threat report, without letting the threat touch anything that matters.</p>
+  <div class="badges"><span class="b g">5/5 probes blocked</span><span class="b">Vultr Serverless Inference</span><span class="b">Cloud Compute · VPC · Terraform</span></div>
+ </div>
+ <div class="right">
+  <div><div class="lbl">Verdict · 9 s end to end</div><div class="card" style="padding:22px 26px;display:flex;gap:22px;align-items:center;color:#10202a"><span style="background:#fde8e3;color:#b3261e;border:1px solid #e9a99f;border-radius:6px;padding:8px 14px;font:700 20px 'JetBrains Mono',monospace">CRITICAL</span><div><div style="font:600 28px 'JetBrains Mono',monospace">https://pander64.github.io/traps/</div><div style="font-size:20px;color:#58707d;margin-top:6px">agent: malicious (95%) · heuristic 100/100 · qwen3.8-27b · prompt injection ignored</div></div></div></div>
+  <div class="row">
+   <div><div class="lbl">Containment log · sandbox self-probes</div><div class="card" style="padding:20px 24px;font:500 19px/1.7 'JetBrains Mono',monospace;color:#10202a;background:#f4f6f8"><div>cloud-metadata 169.254.x <b style="color:#0f7a58">→ blocked</b></div><div>rfc1918 10.0.0.1 <b style="color:#0f7a58">→ blocked</b></div><div>rfc1918 192.168.0.1 <b style="color:#0f7a58">→ blocked</b></div><div>docker-host-ssh :22 <b style="color:#0f7a58">→ blocked</b></div><div>docker-host-api :8000 <b style="color:#0f7a58">→ blocked</b></div></div></div>
+   <div><div class="lbl">Seen inside sandbox</div><div class="card"><img src="crop-shot.png"></div></div>
+  </div>
+ </div>
+</div>
+<div class="foot">github.com/JuanChavarriaU/ioc-sentinel</div>

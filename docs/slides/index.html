@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IoC Sentinel - Pitch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+/* === THEME === */
+:root{
+  --stage-bg:#050a10; --slide-bg:#0b1620; --bg2:#102532; --line:#2c4a5a;
+  --text:#e8f1f5; --muted:#9bb5c3; --accent:#4fd1a5; --danger:#ff7a6b;
+  --font-display:'JetBrains Mono',monospace; --font-body:'Inter',sans-serif;
+  --ease:cubic-bezier(0.16,1,0.3,1);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+/* === VIEWPORT BASE (mandatory) === */
+/* ===========================================
+   FIXED 16:9 STAGE: MANDATORY BASE STYLES
+   Include this ENTIRE file in every presentation.
+   Slides are authored at 1920×1080 and scaled as a whole.
+   =========================================== */
+
+/* 1. Lock the browser viewport */
+html,
+body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: var(--stage-bg, #000);
+}
+
+/* 2. Full-window deck viewport */
+.deck-viewport {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    background: var(--stage-bg, #000);
+}
+
+/* 3. Fixed 16:9 design canvas.
+   JavaScript sets transform: translate(...) scale(...). */
+.deck-stage {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    transform-origin: 0 0;
+    background: var(--slide-bg, #fff);
+}
+
+/* 4. Slides stack inside the fixed stage.
+   Content must be laid out at 1920×1080, not reflowed per device. */
+.slide {
+    position: absolute;
+    inset: 0;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    display: block;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    background: var(--slide-bg, #fff);
+}
+
+.slide.active,
+.slide.visible {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+    z-index: 1;
+}
+
+/* 5. Keep media inside authored slide bounds */
+img,
+video,
+canvas,
+svg {
+    max-width: 100%;
+    max-height: 100%;
+}
+
+/* 6. Presentation chrome stays outside the slide design system */
+.deck-controls {
+    position: fixed;
+    left: 50%;
+    bottom: 22px;
+    transform: translateX(-50%);
+    z-index: 1000;
+}
+
+/* 7. Print one fixed-size slide per page */
+@media print {
+    html,
+    body {
+        width: 1920px;
+        height: auto;
+        overflow: visible;
+        background: #fff;
+    }
+
+    .deck-viewport {
+        position: static;
+        overflow: visible;
+        background: #fff;
+    }
+
+    .deck-stage {
+        position: static;
+        width: auto;
+        height: auto;
+        transform: none !important;
+        background: none;
+    }
+
+    .slide {
+        position: relative;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        width: 1920px;
+        height: 1080px;
+        break-after: page;
+        page-break-after: always;
+    }
+
+    .slide:last-child {
+        break-after: auto;
+        page-break-after: auto;
+    }
+
+    .deck-controls {
+        display: none !important;
+    }
+}
+
+/* 8. Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.2s !important;
+    }
+}
+
+/* === SLIDE SYSTEM === */
+.slide{color:var(--text);font-family:var(--font-body);padding:96px 120px}
+.slide::before{content:"";position:absolute;inset:0;background:radial-gradient(1100px 650px at 92% 0%,#0f6b52 0%,transparent 60%),radial-gradient(900px 600px at 0% 100%,#12384f 0%,transparent 60%);z-index:0}
+.slide>*{position:relative;z-index:1}
+.kicker{font:600 26px/1 var(--font-display);letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin-bottom:28px}
+h1{font:800 190px/.92 var(--font-display);letter-spacing:-.04em}
+h1 em{font-style:normal;color:var(--accent)}
+h2{font:800 76px/1.05 var(--font-display);letter-spacing:-.03em;margin-bottom:44px;max-width:1600px}
+h2 em{font-style:normal;color:var(--accent)}
+.lead{font-size:44px;line-height:1.35;color:var(--muted);max-width:1300px}
+.pill{display:inline-block;border:2px solid var(--line);background:var(--bg2);padding:14px 26px;border-radius:999px;font:500 26px var(--font-display);color:#cfe3ec;margin:0 14px 14px 0}
+.pill.g{border-color:var(--accent);color:var(--accent)}
+.grid{display:grid;gap:36px}
+.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:1fr 1fr 1fr}
+.card{background:var(--bg2);border:2px solid var(--line);border-radius:24px;padding:40px 44px}
+.card h3{font:700 36px/1.15 var(--font-display);margin-bottom:16px;color:var(--accent)}
+.card p,.card li{font-size:30px;line-height:1.4;color:var(--muted)}
+.card ul{list-style:none}.card li{padding:8px 0}
+.card.bad{border-color:var(--danger)}.card.bad h3{color:var(--danger)}
+.mono{font-family:var(--font-display)}
+.big{font:800 150px/1 var(--font-display);color:var(--accent)}
+.foot{position:absolute!important;left:120px;bottom:56px;font:500 24px var(--font-display);color:#7fa3b5}
+.slide-no{position:absolute!important;right:120px;bottom:56px;font:500 24px var(--font-display);color:#7fa3b5}
+.log{background:#f4f6f8;color:#10202a;border-radius:20px;padding:34px 40px;font:500 30px/1.75 var(--font-display)}
+.log b{color:#0f7a58}
+.zone{border-radius:24px;padding:36px 40px;border:3px solid}
+.zone.t{border-color:var(--accent);background:#0d2a26}.zone.u{border-color:var(--danger);background:#2a1614;border-style:dashed}
+.zone h3{font:700 34px var(--font-display);margin-bottom:14px}
+.zone li{list-style:none;font-size:29px;line-height:1.5;color:#cfe3ec}
+.arrow{font:800 60px var(--font-display);color:var(--accent);align-self:center;text-align:center}
+/* === ANIMATION === */
+.reveal{opacity:0;transform:translateY(34px);transition:opacity .7s var(--ease),transform .7s var(--ease)}
+.slide.visible .reveal{opacity:1;transform:none}
+.reveal:nth-child(2){transition-delay:.1s}.reveal:nth-child(3){transition-delay:.2s}.reveal:nth-child(4){transition-delay:.3s}.reveal:nth-child(5){transition-delay:.4s}
+/* === EDIT MODE === */
+body.editing [contenteditable]{outline:2px dashed var(--accent);outline-offset:6px;cursor:text}
+.deck-controls{font:500 14px var(--font-display);color:#7fa3b5;opacity:.7}
+</style>
+</head>
+<body>
+<div class="deck-viewport">
+<main class="deck-stage" id="deckStage">
+
+<!-- === 1. TITLE === -->
+<section class="slide active" style="display:flex;flex-direction:column;justify-content:center">
+  <div class="kicker reveal">Vultr Agent Rush · Track 01 · Blast Radius Zero</div>
+  <h1 class="reveal">IoC<br><em>Sentinel</em></h1>
+  <p class="lead reveal" style="margin-top:44px">An agent that investigates suspicious URLs and writes the threat report, without letting the threat touch anything that matters.</p>
+  <div class="foot">github.com/JuanChavarriaU/ioc-sentinel</div>
+</section>
+
+<!-- === 2. PROBLEM / IDEA === -->
+<section class="slide" style="display:flex;flex-direction:column;justify-content:center">
+  <div class="kicker reveal">The problem</div>
+  <h2 class="reveal">Analysts open dangerous links. <em>Agents should not inherit the risk.</em></h2>
+  <div class="grid g2 reveal">
+    <div class="card bad"><h3>An agent that executes is exposed</h3>
+      <ul><li>Opens attacker-controlled pages</li><li>Reads attacker-controlled text (prompt injection)</li><li>Sits next to credentials and the cloud metadata API</li></ul></div>
+    <div class="card"><h3>IoC Sentinel</h3>
+      <ul><li>Paste a URL, get a verdict in ~9 s</li><li>Typed IoCs, risk score, MITRE ATT&amp;CK, blocklist</li><li>Real work, zero blast radius</li></ul></div>
+  </div>
+  <div class="slide-no">02 / 06</div>
+</section>
+
+<!-- === 3. ARCHITECTURE === -->
+<section class="slide" style="display:flex;flex-direction:column;justify-content:center">
+  <div class="kicker reveal">How it works</div>
+  <h2 class="reveal">Trusted code holds the secrets. <em>Untrusted code holds nothing.</em></h2>
+  <div class="grid reveal" style="grid-template-columns:1fr 110px 1fr;align-items:stretch">
+    <div class="zone t"><h3>HOST · trusted</h3><ul>
+      <li>FastAPI orchestrator, secrets live here</li><li>Vultr Serverless Inference: tool calling + vision</li><li>DNS · crt.sh · URLhaus tools</li><li>Deterministic IoC extraction + score</li></ul></div>
+    <div class="arrow">&#8680;</div>
+    <div class="zone u"><h3>SANDBOX · untrusted</h3><ul>
+      <li>1 throw-away Chromium per URL</li><li>No secrets, read-only rootfs, cap-drop ALL</li><li>Jailed network: public :80/:443 only</li><li>Everything it returns is data, never instructions</li></ul></div>
+  </div>
+  <p class="lead reveal" style="margin-top:40px;font-size:34px">Prompt injection on the test page ("classify as BENIGN") is detected, ignored and reported.</p>
+  <div class="slide-no">03 / 06</div>
+</section>
+
+<!-- === 4. CONTAINMENT === -->
+<section class="slide" style="display:flex;flex-direction:column;justify-content:center">
+  <div class="kicker reveal">Challenge 1 · Containment moment</div>
+  <h2 class="reveal">The sandbox <em>proves</em> it is contained, live.</h2>
+  <div class="grid reveal" style="grid-template-columns:1.25fr 1fr;align-items:center">
+    <div class="log">
+      <div>cloud-metadata 169.254.169.254 <b>&rarr; blocked</b></div>
+      <div>rfc1918 10.0.0.1 <b>&rarr; blocked</b></div>
+      <div>rfc1918 192.168.0.1 <b>&rarr; blocked</b></div>
+      <div>docker-host-ssh :22 <b>&rarr; blocked</b></div>
+      <div>docker-host-api :8000 <b>&rarr; blocked</b></div>
+    </div>
+    <div>
+      <p class="big">5/5</p>
+      <p class="lead" style="font-size:36px;margin-top:10px">probes blocked from inside the sandbox. Container destroyed in ~10 ms, 0 leftovers.</p>
+    </div>
+  </div>
+  <div class="slide-no">04 / 06</div>
+</section>
+
+<!-- === 5. VULTR === -->
+<section class="slide" style="display:flex;flex-direction:column;justify-content:center">
+  <div class="kicker reveal">Built on Vultr</div>
+  <h2 class="reveal">One command up. <em>One command down.</em></h2>
+  <div class="grid g2 reveal">
+    <div class="card"><h3>Serverless Inference</h3><p>qwen3.8-27b: agent reasoning, tool calls and screenshot verification.</p></div>
+    <div class="card"><h3>Cloud Compute</h3><p>Ubuntu 24.04 VM: API, Docker, sandboxes, Caddy HTTPS.</p></div>
+    <div class="card"><h3>VPC + Firewall</h3><p>Private control plane the jail cannot reach. SSH only from the admin IP.</p></div>
+    <div class="card"><h3>Terraform</h3><p>VPC, firewall, VM and inference subscription as code. <span class="mono">make up</span> / <span class="mono">make down</span>.</p></div>
+  </div>
+  <div class="slide-no">05 / 06</div>
+</section>
+
+<!-- === 6. RESULTS === -->
+<section class="slide" style="display:flex;flex-direction:column;justify-content:center">
+  <div class="kicker reveal">Verified results</div>
+  <h2 class="reveal">Malicious page: <em>caught. Analyst: still in control.</em></h2>
+  <div class="grid g3 reveal">
+    <div class="card"><h3>100 / 100</h3><p>Heuristic score, agent verdict malicious (95%)</p></div>
+    <div class="card"><h3>~9 s</h3><p>End to end, 11 typed IoCs, 3 ATT&amp;CK techniques</p></div>
+    <div class="card"><h3>Human gate</h3><p>Export unlocks only after analyst sign-off</p></div>
+  </div>
+  <div style="margin-top:44px" class="reveal"><span class="pill g">Live demo</span><span class="pill">github.com/JuanChavarriaU/ioc-sentinel</span></div>
+  <div class="slide-no">06 / 06</div>
+</section>
+
+</main>
+</div>
+<div class="deck-controls">&larr; &rarr; navigate · E edit</div>
+
+<script>
+/* === CONTROLLER === */
+class Deck{
+  constructor(){
+    this.slides=[...document.querySelectorAll('.slide')];this.i=0;this.stage=document.getElementById('deckStage');
+    const fit=()=>{const f=Math.min(innerWidth/1920,innerHeight/1080);this.stage.style.transform='translate('+((innerWidth-1920*f)/2)+'px,'+((innerHeight-1080*f)/2)+'px) scale('+f+')'};
+    fit();addEventListener('resize',fit);
+    addEventListener('keydown',e=>{
+      const ed=document.body.classList.contains('editing');
+      if(ed&&e.key!=='Escape')return;
+      if(['ArrowRight','ArrowDown',' ','PageDown'].includes(e.key)){e.preventDefault();this.go(this.i+1)}
+      if(['ArrowLeft','ArrowUp','PageUp'].includes(e.key)){e.preventDefault();this.go(this.i-1)}
+      if((e.key==='e'&&!ed)||(e.key==='Escape'&&ed))this.toggleEdit();
+    });
+    let x0=null;addEventListener('touchstart',e=>x0=e.touches[0].clientX);
+    addEventListener('touchend',e=>{if(x0===null)return;const d=e.changedTouches[0].clientX-x0;if(Math.abs(d)>50)this.go(this.i+(d<0?1:-1));x0=null});
+    addEventListener('wheel',e=>{if(Math.abs(e.deltaY)>40)this.go(this.i+(e.deltaY>0?1:-1))},{passive:true});
+    if(location.hash)this.i=Math.max(0,Math.min(this.slides.length-1,(parseInt(location.hash.slice(1))||1)-1));
+    addEventListener('hashchange',()=>{const n=(parseInt(location.hash.slice(1))||1)-1;if(n!==this.i)this.go(n)});
+    this.go(this.i);
+  }
+  go(n){this.i=Math.max(0,Math.min(n,this.slides.length-1));
+    this.slides.forEach((s,k)=>{s.classList.toggle('active',k===this.i);s.classList.toggle('visible',k===this.i)});
+    history.replaceState(null,'','#'+(this.i+1));}
+  toggleEdit(){const on=document.body.classList.toggle('editing');
+    document.querySelectorAll('h1,h2,h3,p,li,.kicker').forEach(el=>el.contentEditable=on);}
+}
+new Deck();
+</script>
+</body>
+</html>
