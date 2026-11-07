@@ -24,6 +24,10 @@ class Settings:
     agent_max_steps: int = int(_env("AGENT_MAX_STEPS", "6"))
     agent_max_scans: int = int(_env("AGENT_MAX_SCANS", "2"))
 
+    # --- Public-demo abuse protection (per client IP; 0 disables) ---
+    rate_limit_per_ip: int = int(_env("RATE_LIMIT_PER_IP", "5"))
+    rate_window_s: int = int(_env("RATE_WINDOW_S", "600"))
+
     # --- Sandbox ---
     sandbox_image: str = _env("SANDBOX_IMAGE", "ioc-sentinel/sandbox-browser:latest")
     sandbox_network: str = _env("SANDBOX_NETWORK", "ioc-jail")

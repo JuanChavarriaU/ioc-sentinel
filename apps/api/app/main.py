@@ -12,13 +12,14 @@ import json
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from .agent.loop import investigate
 from .config import settings
+from .ratelimit import enforce
 from .sandbox.runner import run_in_sandbox, save_artifacts
 from .sandbox.url_guard import UnsafeTarget, normalize_target
 
@@ -53,23 +54,25 @@ def healthz():
 
 
 @app.post("/api/scans")
-async def create_scan(req: ScanRequest):
+async def create_scan(req: ScanRequest, request: Request):
     try:
         target = normalize_target(req.url)
     except UnsafeTarget as exc:
         raise HTTPException(400, str(exc))
+    enforce(request)
     run = await run_in_threadpool(run_in_sandbox, target)
     save_artifacts(run)
     return json.loads((SCANS / run.scan_id / "result.json").read_text())
 
 
 @app.post("/api/investigations")
-async def create_investigation(req: ScanRequest):
+async def create_investigation(req: ScanRequest, request: Request):
     """Full agent run: LLM (Vultr Serverless Inference) + sandboxed scan + host-side threat intel."""
     try:
         target = normalize_target(req.url)
     except UnsafeTarget as exc:
         raise HTTPException(400, str(exc))
+    enforce(request)  # per-IP quota (429 + Retry-After)
     # Public demo: cap concurrent runs (each = 1 sandbox container + LLM spend).
     if _SLOTS.locked():
         raise HTTPException(429, "Too many investigations running; retry in a few seconds.")
