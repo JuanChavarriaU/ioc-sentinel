@@ -1,0 +1,23 @@
+[Unit]
+Description=IoC Sentinel API (FastAPI orchestrator)
+After=network-online.target docker.service ioc-jail.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=__APP_USER__
+Group=docker
+WorkingDirectory=__REPO_DIR__
+EnvironmentFile=__REPO_DIR__/.env
+# Bound to loopback: only Caddy (TLS) is exposed to the Internet.
+ExecStart=__REPO_DIR__/.venv/bin/python -m uvicorn app.main:app --app-dir apps/api --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=__REPO_DIR__/data
+
+[Install]
+WantedBy=multi-user.target

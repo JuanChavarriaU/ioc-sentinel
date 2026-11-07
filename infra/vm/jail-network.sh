@@ -99,8 +99,11 @@ hook_chains() {
   # Forwarded traffic leaving the jail bridge.
   iptables -C DOCKER-USER -i "$BR" -j "$CHAIN" 2>/dev/null || iptables -I DOCKER-USER 1 -i "$BR" -j "$CHAIN"
   # Traffic from the jail to the VM itself (host services, SSH, the API, the VM public IP).
-  iptables -A INPUT -i "$BR" -m conntrack --ctstate NEW -m limit --limit 20/min -j LOG --log-prefix "IOC-JAIL-HOST " --log-level 4
-  iptables -A INPUT -i "$BR" -m conntrack --ctstate NEW -j REJECT --reject-with icmp-admin-prohibited
+  # IMPORTANT: insert at the TOP of INPUT (-I, not -A). ufw's chains come first in INPUT and
+  # `ufw allow 22` would otherwise accept jail->host SSH before these rules are ever evaluated.
+  # REJECT first, then LOG on top of it, so the final order is: LOG, REJECT, <ufw chains...>.
+  iptables -I INPUT 1 -i "$BR" -m conntrack --ctstate NEW -j REJECT --reject-with icmp-admin-prohibited
+  iptables -I INPUT 1 -i "$BR" -m conntrack --ctstate NEW -m limit --limit 20/min -j LOG --log-prefix "IOC-JAIL-HOST " --log-level 4
 }
 
 up() {
@@ -109,8 +112,10 @@ up() {
   ensure_network
   purge_input_rules
   reset_chain
-  build_rules
+  # hook_chains BEFORE build_rules: LAB_ALLOW ACCEPT rules are inserted at INPUT position 1
+  # by build_rules and must end up ABOVE the host REJECT.
   hook_chains
+  build_rules
   # Belt and braces: no IPv6 out of the jail.
   sysctl -q -w "net.ipv6.conf.$BR.disable_ipv6=1" 2>/dev/null || true
   log "jail active on $BR"

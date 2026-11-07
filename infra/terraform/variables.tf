@@ -74,9 +74,9 @@ variable "repo_ref" {
 }
 
 variable "enable_gvisor" {
-  description = "Install gVisor (runsc) during bootstrap and use it as the sandbox runtime."
+  description = "Install gVisor (runsc) and use it as the sandbox runtime. Default false: runsc breaks DNS on user-defined Docker networks (README, lesson 2)."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "use_reserved_ip" {

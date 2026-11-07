@@ -2,7 +2,7 @@ SHELL := /bin/bash
 PY ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 URL ?= https://example.com
 
-.PHONY: tf-init tf-plan tf-apply tf-destroy tf-sync tf-bootstrap tf-env tf-status tf-tunnel tf-ssh help bootstrap gvisor jail jail-status jail-down sandbox-image check-models scan smoke api traps
+.PHONY: up down status tf-init tf-plan tf-apply tf-destroy tf-sync tf-bootstrap tf-env tf-status tf-tunnel tf-ssh help bootstrap gvisor jail jail-status jail-down sandbox-image check-models scan smoke api traps
 
 help:
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-14s\033[0m %s\n",$$1,$$2}'
@@ -39,6 +39,16 @@ api: ## run the FastAPI orchestrator on :8000
 
 traps: ## serve demo trap pages on :8088 (use with LAB_ALLOW=172.30.0.1:8088 make jail)
 	cd demo/traps && head -c 4096 /dev/urandom > invoice.bin && python3 -m http.server 8088
+
+# ---------------------------------------------------------------- One-command lifecycle (laptop)
+up: ## create + configure + publish the whole stack on Vultr (needs VULTR_API_KEY)
+	./scripts/deploy.sh up
+
+status: ## show VM, public URL and health
+	./scripts/deploy.sh status
+
+down: ## DESTROY everything:  make down CONFIRM=yes
+	CONFIRM=$(CONFIRM) ./scripts/deploy.sh down
 
 # ---------------------------------------------------------------- Terraform (laptop)
 TF := terraform -chdir=infra/terraform

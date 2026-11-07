@@ -19,12 +19,12 @@ class InferenceClient:
             timeout=120,
         )
 
-    def chat(self, messages: list[dict], *, tools: list[dict] | None = None, **extra) -> dict:
+    def chat(self, messages: list[dict], *, tools: list[dict] | None = None, timeout: float | None = None, **extra) -> dict:
         payload = {"model": self.model, "messages": messages, **extra}
         if tools:
             payload["tools"] = tools
             payload.setdefault("tool_choice", "auto")
-        r = self._http.post("/chat/completions", json=payload)
+        r = self._http.post("/chat/completions", json=payload, **({"timeout": timeout} if timeout else {}))
         r.raise_for_status()
         return r.json()
 

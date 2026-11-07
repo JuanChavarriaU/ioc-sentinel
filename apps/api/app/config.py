@@ -17,7 +17,26 @@ class Settings:
     # --- Vultr Serverless Inference (host only) ---
     inference_base_url: str = _env("VULTR_INFERENCE_BASE_URL", "https://api.vultrinference.com/v1")
     inference_api_key: str | None = _env("VULTR_INFERENCE_API_KEY")
-    agent_model: str = _env("AGENT_MODEL", "kimi-k2-instruct")
+    agent_model: str = _env("AGENT_MODEL", "qwen3.8-27b")
+
+    # --- Visual verification (Pattern B: a vision model verifies the screenshot) ---
+    vision_enabled: bool = _env("VISION_ENABLED", "1") not in ("0", "false", "no")
+    vision_model: str | None = _env("VISION_MODEL")  # defaults to AGENT_MODEL (qwen3.8-27b supports vision)
+    vision_timeout_s: float = float(_env("VISION_TIMEOUT_S", "20"))
+
+    # --- Host-side threat intel (optional; tools degrade gracefully without keys) ---
+    abusech_auth_key: str | None = _env("ABUSECH_AUTH_KEY")
+    agent_max_steps: int = int(_env("AGENT_MAX_STEPS", "6"))
+    agent_max_scans: int = int(_env("AGENT_MAX_SCANS", "2"))
+
+    # --- Public-demo abuse protection (per client IP; 0 disables) ---
+    rate_limit_per_ip: int = int(_env("RATE_LIMIT_PER_IP", "5"))
+    rate_window_s: int = int(_env("RATE_WINDOW_S", "600"))
+
+    # --- Browser access from a separately hosted front end (comma-separated origins, ) ---
+    cors_origins: list[str] = field(
+        default_factory=lambda: [o.strip().rstrip("/") for o in (_env("CORS_ORIGINS", "") or "").split(",") if o.strip()]
+    )
 
     # --- Sandbox ---
     sandbox_image: str = _env("SANDBOX_IMAGE", "ioc-sentinel/sandbox-browser:latest")

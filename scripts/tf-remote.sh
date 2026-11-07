@@ -37,6 +37,10 @@ case "${1:-}" in
         && sed -i \"s|^VULTR_INFERENCE_API_KEY=.*|VULTR_INFERENCE_API_KEY=\$k|\" \$f \
         || echo \"VULTR_INFERENCE_API_KEY=\$k\" >> \$f
       echo 'VULTR_INFERENCE_API_KEY written to' \$f"
+    # Not a secret: allowed browser origins for a front end hosted elsewhere.
+    if [[ -n "${CORS_ORIGINS:-}" ]]; then
+      "${SSH[@]}" "f=$DIR/.env; grep -q '^CORS_ORIGINS=' \$f && sed -i 's|^CORS_ORIGINS=.*|CORS_ORIGINS=${CORS_ORIGINS}|' \$f || echo 'CORS_ORIGINS=${CORS_ORIGINS}' >> \$f; echo 'CORS_ORIGINS set'"
+    fi
     ;;
   status)
     "${SSH[@]}" "cloud-init status --long; echo; cat /var/log/ioc-network.log; echo; tail -n 15 /var/log/ioc-bootstrap.log 2>/dev/null; echo; docker network ls --filter name=ioc-jail 2>/dev/null; command -v runsc && echo gvisor-ok || true"
