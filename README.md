@@ -17,7 +17,8 @@ An analyst pastes a URL. A tool-calling agent running on **Vultr Serverless Infe
 1. `scan_url` - opens the page in a real Chromium **inside a throw-away, credential-less container** and returns observations.
 2. `dns_lookup`, `cert_transparency` (crt.sh), `urlhaus_host` (abuse.ch) - host-side threat-intel tools that hold credentials the sandbox never sees.
 3. Deterministic code extracts **typed IoCs** and a **risk score** (so the evidence is reproducible and does not depend on the LLM).
-4. The dashboard shows the agent verdict, the heuristic score, a screenshot taken inside the sandbox, the **live Containment Log**, and the IoC table. Export (JSON/HTML) is gated behind an **analyst approval** checkbox (human in the loop).
+4. A deterministic **report** is built from the evidence: risk level, MITRE ATT&CK techniques (indicative), recommended actions, a blocklist, and an automatic **analyst-review flag** when the agent and the heuristics disagree.
+5. The dashboard streams the agent's steps live, then shows the verdict, the heuristic score, a screenshot taken inside the sandbox, the Containment Log, and filterable/copyable IoCs. Export (JSON/HTML) is gated behind an **analyst approval** checkbox (human in the loop). English/Spanish and light/dark.
 
 ### Verified result (against the public fixture)
 
@@ -29,7 +30,7 @@ An analyst pastes a URL. A tool-calling agent running on **Vultr Serverless Infe
 | IoCs extracted | 11 (URL, domains, IPs, TLS cert, SHA-256/MD5 of the drive-by file, credential form) |
 | Containment self-probes | all 5 `blocked` (cloud metadata, 10/8, 192.168/16, host SSH, host API) |
 | Sandbox lifecycle | container destroyed in ~10 ms, 0 leftovers |
-| Time | ~13 s end to end |
+| Time | ~9 s end to end (was 34 s: crt.sh alone took 25 s; now prefetched in parallel with an 8 s cap) |
 
 ## Architecture
 
@@ -98,8 +99,9 @@ Manual steps and details: [docs/INFRA.md](docs/INFRA.md), [docs/DIA1.md](docs/DI
 | Method | Path | |
 |---|---|---|
 | `GET` | `/` | Dashboard |
-| `POST` | `/api/investigations` `{"url": ...}` | Full agent run → verdict, heuristic, IoCs, containment log |
-| `GET` | `/api/investigations/{id}` | Stored result |
+| `POST` | `/api/investigations` `{"url": ...}` | Full agent run, blocking (`?wait=true`, default) → verdict, heuristic, `report`, IoCs, containment log |
+| `POST` | `/api/investigations?wait=false` | Returns `{investigation_id, status:"running"}` at once (used by the dashboard) |
+| `GET` | `/api/investigations/{id}` | `status: running` + live `events`, or `done` + the full result |
 | `POST` | `/api/scans` | Sandbox only (no LLM) |
 | `GET` | `/api/scans/{id}/screenshot.png` · `/session.har` | Evidence (HAR has metadata only, no bodies) |
 | `GET` | `/healthz` | Health |
@@ -145,7 +147,12 @@ Real problems hit while building this; each one is fixed in the repo.
 9. **API data is attacker-controlled.** The dashboard only uses `textContent` (never `innerHTML`), and exported HTML is escaped.
 10. **Public endpoint ≠ open endpoint.** Every investigation costs a container and LLM tokens, so the public demo has a
     concurrency cap and a per-IP limit. Caddy's stock build has no rate limiter, hence the in-app one.
-11. **Don't trust the first model answer.** The agent output must be parsed defensively (`<think>` blocks, code fences,
+11. **Profile before optimizing.** The 34 s run was 25 s of one slow lookup (crt.sh). Fix: 8 s timeout, prefetch while the
+    sandbox scans, shared in-flight/cached result, and parallel tool calls.
+12. **Chromium blocks `http://` sub-requests from an `https://` page (mixed content)** before they reach the network, so the
+    fixture's metadata/VPC probes show up as `mixed-content` failures, not as jail rejections. The jail itself is proven by the
+    in-sandbox self-probes; to demo the jail with real page-originated probes, serve the fixture over plain `http://`.
+13. **Don't trust the first model answer.** The agent output must be parsed defensively (`<think>` blocks, code fences,
     bad tool arguments); the IoC list and score are computed deterministically and shown beside the verdict.
 
 ## Status
@@ -157,6 +164,11 @@ Real problems hit while building this; each one is fixed in the repo.
 - [x] Public HTTPS endpoint, concurrency cap, per-IP rate limit
 - [x] One-command deploy / destroy
 - [ ] gVisor by default (DNS workaround), STIX 2.1 export, urlscan/VirusTotal tools (need keys)
+
+## Acknowledgments
+
+The dashboard's design approach (operational UI, semantic color, no decorative filler) follows the guidance in
+[ConardLi/garden-skills](https://github.com/ConardLi/garden-skills) (`web-design-engineer`, MIT). No code was copied.
 
 ## License
 

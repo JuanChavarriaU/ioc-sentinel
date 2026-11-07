@@ -13,12 +13,15 @@ from __future__ import annotations
 import json
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Callable
+from urllib.parse import urlparse
 
 from ..config import settings
 from ..inference.client import InferenceClient
 from ..ioc.consolidate import extract_iocs, score
-from .tools import DISPATCH, TOOL_SCHEMAS, ToolContext
+from ..ioc.report import build_report
+from .tools import DISPATCH, TOOL_SCHEMAS, ToolContext, prefetch_cert_transparency
 
 SYSTEM_PROMPT = """You are IoC Sentinel, a security analyst agent. Investigate ONE suspicious target URL and \
 produce Indicators of Compromise.
@@ -71,6 +74,10 @@ def investigate(url: str, emit: Callable[[dict], None] | None = None) -> dict:
         {"role": "user", "content": f"Investigate this target: {url}"},
     ]
     log("agent_start", model=client.model, url=url)
+    try:  # warm the slowest enrichment (crt.sh) in the background while the sandbox scans
+        prefetch_cert_transparency(urlparse(url).hostname or "")
+    except Exception:
+        pass
 
     final: dict | None = None
     for step in range(1, settings.agent_max_steps + 1):
@@ -85,7 +92,8 @@ def investigate(url: str, emit: Callable[[dict], None] | None = None) -> dict:
                 messages.append({"role": "user", "content": "Reply with ONLY the JSON object described."})
                 continue
             break
-        for call in calls:
+        # Independent tool calls from the same model turn run in parallel (sandbox scan || crt.sh || DNS ...).
+        def run_call(call: dict) -> tuple[dict, dict, float]:
             name = call["function"]["name"]
             try:
                 args = json.loads(call["function"].get("arguments") or "{}")
@@ -93,12 +101,19 @@ def investigate(url: str, emit: Callable[[dict], None] | None = None) -> dict:
                 args = {}
             log("tool_call", step=step, tool=name, args=args)
             fn = DISPATCH.get(name)
+            t = time.time()
             try:
                 result = fn(ctx, **args) if fn else {"error": f"unknown tool {name}"}
             except Exception as exc:  # bad args from the model must not kill the investigation
                 result = {"error": f"tool failed: {exc.__class__.__name__}: {str(exc)[:200]}"}
-            log("tool_result", step=step, tool=name, ok="error" not in result)
-            messages.append({"role": "tool", "tool_call_id": call["id"], "content": _wrap(name, result)})
+            ms = round((time.time() - t) * 1000)
+            log("tool_result", step=step, tool=name, ok="error" not in result, ms=ms)
+            return call, result, ms
+
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            for call, result, _ms in list(pool.map(run_call, calls)):  # map keeps the model's call order
+                messages.append({"role": "tool", "tool_call_id": call["id"],
+                                 "content": _wrap(call["function"]["name"], result)})
     else:
         log("agent_step_limit", max_steps=settings.agent_max_steps)
 
@@ -107,15 +122,18 @@ def investigate(url: str, emit: Callable[[dict], None] | None = None) -> dict:
     containment_log = sorted(
         [e for r in ctx.runs for e in r.containment_log] + trace, key=lambda e: e["t"]
     )
+    agent = final or {"verdict": "inconclusive", "confidence": 0.0,
+                      "summary": "Agent did not return a parseable verdict.", "findings": [],
+                      "prompt_injection_detected": False}
+    iocs = extract_iocs(obs) if obs else []
     return {
         "url": url,
         "model": client.model,
         "scan_ids": ctx.scan_ids,
-        "agent": final or {"verdict": "inconclusive", "confidence": 0.0,
-                           "summary": "Agent did not return a parseable verdict.", "findings": [],
-                           "prompt_injection_detected": False},
+        "agent": agent,
         "heuristic": heuristic,
-        "iocs": extract_iocs(obs) if obs else [],
+        "report": build_report(agent, heuristic, iocs, url),
+        "iocs": iocs,
         "containment_log": containment_log,
         "duration_s": round(time.time() - t0, 1),
     }

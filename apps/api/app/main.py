@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 import uuid
 from pathlib import Path
 
@@ -27,6 +28,8 @@ app = FastAPI(title="IoC Sentinel", version="0.2.0")
 SCANS = settings.data_dir / "scans"
 INVESTIGATIONS = settings.data_dir / "investigations"
 _SLOTS = asyncio.Semaphore(2)  # max concurrent agent investigations
+JOBS: dict[str, dict] = {}     # in-memory state of async investigations (finished ones are also on disk)
+_MAX_JOBS = 200
 
 
 class ScanRequest(BaseModel):
@@ -66,8 +69,12 @@ async def create_scan(req: ScanRequest, request: Request):
 
 
 @app.post("/api/investigations")
-async def create_investigation(req: ScanRequest, request: Request):
-    """Full agent run: LLM (Vultr Serverless Inference) + sandboxed scan + host-side threat intel."""
+async def create_investigation(req: ScanRequest, request: Request, wait: bool = True):
+    """Full agent run: LLM (Vultr Serverless Inference) + sandboxed scan + host-side threat intel.
+
+    wait=true (default): block and return the finished result.
+    wait=false: return {investigation_id, status:"running"} at once; poll GET /api/investigations/{id}.
+    """
     try:
         target = normalize_target(req.url)
     except UnsafeTarget as exc:
@@ -76,12 +83,38 @@ async def create_investigation(req: ScanRequest, request: Request):
     # Public demo: cap concurrent runs (each = 1 sandbox container + LLM spend).
     if _SLOTS.locked():
         raise HTTPException(429, "Too many investigations running; retry in a few seconds.")
-    async with _SLOTS:
-        try:
-            result = await run_in_threadpool(investigate, target)
-        except RuntimeError as exc:  # e.g. inference key not configured
-            raise HTTPException(503, str(exc))
     inv_id = uuid.uuid4().hex[:12]
+
+    if wait:  # blocking mode (curl / scripts): returns the finished result
+        async with _SLOTS:
+            try:
+                result = await run_in_threadpool(investigate, target)
+            except RuntimeError as exc:  # e.g. inference key not configured
+                raise HTTPException(503, str(exc))
+        return _persist(inv_id, result)
+
+    # Async mode (dashboard): return immediately, the client polls GET /api/investigations/{id}
+    # and renders the agent events as they happen.
+    job = {"status": "running", "url": target, "events": [], "started": time.time()}
+    JOBS[inv_id] = job
+    for old in list(JOBS)[:-_MAX_JOBS]:  # bound memory
+        JOBS.pop(old, None)
+
+    async def runner() -> None:
+        async with _SLOTS:
+            try:
+                result = await run_in_threadpool(investigate, target, job["events"].append)
+                job["result"] = _persist(inv_id, result)
+                job["status"] = "done"
+            except Exception as exc:  # surface any failure to the polling client
+                job["status"] = "error"
+                job["error"] = f"{exc.__class__.__name__}: {str(exc)[:300]}"
+
+    asyncio.create_task(runner())
+    return {"investigation_id": inv_id, "status": "running"}
+
+
+def _persist(inv_id: str, result: dict) -> dict:
     result["investigation_id"] = inv_id
     d = INVESTIGATIONS / inv_id
     d.mkdir(parents=True, exist_ok=True)
@@ -93,10 +126,16 @@ async def create_investigation(req: ScanRequest, request: Request):
 def get_investigation(inv_id: str):
     if not inv_id.isalnum():
         raise HTTPException(400, "bad investigation id")
+    job = JOBS.get(inv_id)
+    if job and job["status"] == "running":
+        return {"investigation_id": inv_id, "status": "running", "url": job["url"],
+                "elapsed_s": round(time.time() - job["started"], 1), "events": list(job["events"])}
+    if job and job["status"] == "error":
+        return {"investigation_id": inv_id, "status": "error", "error": job["error"]}
     p = INVESTIGATIONS / inv_id / "investigation.json"
     if not p.exists():
         raise HTTPException(404, "investigation not found")
-    return json.loads(p.read_text())
+    return {"status": "done", **json.loads(p.read_text())}
 
 
 @app.get("/api/scans/{scan_id}")

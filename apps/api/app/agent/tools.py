@@ -9,6 +9,9 @@ from __future__ import annotations
 
 import re
 import socket
+import threading
+import time
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 import httpx
@@ -59,11 +62,20 @@ TOOL_SCHEMAS = [
 ]
 
 
+_CRT_FUTURES: dict[str, Future] = {}
+_CRT_STARTED: dict[str, float] = {}
+_CRT_LOCK = threading.Lock()
+_CRT_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="crtsh")
+_CRT_TTL_S = 3600
+
+
 @dataclass
 class ToolContext:
     runs: list[SandboxRun] = field(default_factory=list)
     scan_ids: list[str] = field(default_factory=list)
     events: list[dict] = field(default_factory=list)
+    lock: threading.Lock = field(default_factory=threading.Lock)  # tools may run in parallel
+    scans_reserved: int = 0
 
     @property
     def last_obs(self) -> dict:
@@ -102,15 +114,18 @@ def _condense(run: SandboxRun) -> dict:
 
 
 def scan_url(ctx: ToolContext, url: str) -> dict:
-    if len(ctx.runs) >= settings.agent_max_scans:
-        return {"error": f"scan limit reached ({settings.agent_max_scans} per investigation)"}
+    with ctx.lock:  # reserve a slot atomically (tool calls can run in parallel)
+        if ctx.scans_reserved >= settings.agent_max_scans:
+            return {"error": f"scan limit reached ({settings.agent_max_scans} per investigation)"}
+        ctx.scans_reserved += 1
     try:
         run = run_in_sandbox(url)  # normalize_target() inside rejects internal/unsafe targets
     except UnsafeTarget as exc:
         return {"error": f"target refused by URL guard: {exc}"}
     save_artifacts(run)
-    ctx.runs.append(run)
-    ctx.scan_ids.append(run.scan_id)
+    with ctx.lock:
+        ctx.runs.append(run)
+        ctx.scan_ids.append(run.scan_id)
     return _condense(run)
 
 
@@ -125,22 +140,48 @@ def dns_lookup(ctx: ToolContext, domain: str) -> dict:
     return {"domain": d, "resolves": True, "addresses": sorted({i[4][0] for i in infos})}
 
 
-def cert_transparency(ctx: ToolContext, domain: str) -> dict:
-    d = _clean_domain(domain)
-    if not d:
-        return {"error": "invalid domain"}
+def _crt_fetch(d: str) -> dict:
     try:
-        r = httpx.get("https://crt.sh/", params={"q": d, "output": "json"}, timeout=25)
+        # crt.sh is often slow: a short timeout keeps the investigation fast (it was 25 s of a 34 s run).
+        r = httpx.get("https://crt.sh/", params={"q": d, "output": "json"}, timeout=8)
         r.raise_for_status()
         rows = r.json()
-    except Exception as exc:  # crt.sh is slow/flaky; never crash the investigation
-        return {"domain": d, "error": f"crt.sh unavailable: {exc.__class__.__name__}"}
+    except Exception as exc:  # flaky service; never crash or stall the investigation
+        return {"domain": d, "error": f"crt.sh unavailable ({exc.__class__.__name__}); not a verdict signal"}
     names: set[str] = set()
     for row in rows:
         names.update(n.strip().lower() for n in str(row.get("name_value", "")).splitlines())
     firsts = sorted(str(r.get("not_before", "")) for r in rows if r.get("not_before"))
     return {"domain": d, "certificates": len(rows), "first_seen": firsts[0] if firsts else None,
             "latest_seen": firsts[-1] if firsts else None, "related_names": sorted(names)[:20]}
+
+
+def _crt_future(d: str) -> Future:
+    """One in-flight/cached lookup per domain, shared by the prefetch and the model's own tool call."""
+    with _CRT_LOCK:
+        fut = _CRT_FUTURES.get(d)
+        if fut is not None and (not fut.done() or time.time() - _CRT_STARTED[d] < _CRT_TTL_S):
+            return fut
+        fut = _CRT_POOL.submit(_crt_fetch, d)
+        _CRT_FUTURES[d], _CRT_STARTED[d] = fut, time.time()
+        return fut
+
+
+def prefetch_cert_transparency(host: str) -> None:
+    """Start the slow crt.sh lookup while the sandbox is still scanning."""
+    d = _clean_domain(host)
+    if d:
+        _crt_future(d)
+
+
+def cert_transparency(ctx: ToolContext, domain: str) -> dict:
+    d = _clean_domain(domain)
+    if not d:
+        return {"error": "invalid domain"}
+    try:
+        return _crt_future(d).result(timeout=9)
+    except Exception:
+        return {"domain": d, "error": "crt.sh lookup timed out; not a verdict signal"}
 
 
 def urlhaus_host(ctx: ToolContext, host: str) -> dict:
