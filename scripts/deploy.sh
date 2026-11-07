@@ -23,8 +23,6 @@ SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=
 log() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 IP_LABEL="${IP_LABEL:-ioc-sentinel-persistent}"
-# Browser origin of the GitHub Pages front end (origin only, no path). Override with CORS_ORIGINS=a,b to add others.
-export CORS_ORIGINS="${CORS_ORIGINS:-https://juanchavarriau.github.io}"
 VULTR_API="https://api.vultr.com/v2"
 tfo() { terraform -chdir="$TF_DIR" output -raw "$1"; }
 
