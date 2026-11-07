@@ -85,6 +85,12 @@ variable "use_reserved_ip" {
   default     = false
 }
 
+variable "reserved_ip_id" {
+  description = "ID of an EXISTING Vultr reserved IPv4 to use as the VM's main IP. It lives outside this state, so `terraform destroy` never releases it and the public URL survives destroy/up cycles. scripts/deploy.sh creates and passes it automatically (TF_VAR_reserved_ip_id)."
+  type        = string
+  default     = ""
+}
+
 variable "create_inference" {
   description = "Create the Vultr Serverless Inference subscription with Terraform (its API key becomes a sensitive output)."
   type        = bool
