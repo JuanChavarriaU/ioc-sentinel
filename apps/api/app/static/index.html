@@ -117,7 +117,32 @@
   .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
   footer{margin-top:40px;color:var(--mute);font-size:12.5px;border-top:1px solid var(--line);padding-top:14px}
   a{color:var(--accent)}
+  #print{display:none}
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+<style id="printcss" media="print">
+  @page{size:A4;margin:14mm}
+  html,body{background:#fff!important;color:#111!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .wrap{display:none!important}
+  #print{display:block!important;font:10.5pt/1.45 "Inter",system-ui,sans-serif;color:#111}
+  #print .brandline{font:600 9pt "JetBrains Mono",monospace;letter-spacing:.1em;text-transform:uppercase;color:#0b7a62}
+  #print h1{font:700 21pt "Inter Tight",sans-serif;letter-spacing:-.02em;margin:2px 0 10px;color:#111}
+  #print h2{font:700 8.5pt "JetBrains Mono",monospace;text-transform:uppercase;letter-spacing:.08em;color:#555;border-bottom:1px solid #bbb;padding-bottom:3px;margin:16px 0 7px;break-after:avoid}
+  #print .sevrow{display:flex;gap:12px;align-items:center;margin-bottom:10px}
+  #print .tgt{font:500 10.5pt "JetBrains Mono",monospace;word-break:break-all}
+  #print .sev{font:700 10pt "JetBrains Mono",monospace;letter-spacing:.08em;text-transform:uppercase;padding:3px 10px;border:1.5px solid currentColor;border-radius:4px;background:none}
+  #print .sev-critical{color:#b42318} #print .sev-high{color:#c2540a} #print .sev-medium{color:#9a6a00} #print .sev-low{color:#2459c9} #print .sev-info{color:#0b7a62}
+  #print table{width:100%;border-collapse:collapse;font-size:9pt;margin:0 0 4px}
+  #print th,#print td{border-bottom:1px solid #ddd;padding:3px 6px;text-align:left;vertical-align:top;word-break:break-all;color:#111}
+  #print th{font:600 7.5pt "JetBrains Mono",monospace;color:#666;text-transform:uppercase}
+  #print td.v{font:8.5pt "JetBrains Mono",monospace}
+  #print tr,#print li{break-inside:avoid}
+  #print p,#print li{margin:3px 0}
+  #print table.kv td:first-child{width:26%;color:#555}
+  #print table.kv td.v{font:9pt "Inter",system-ui,sans-serif}
+  #print .flag{border-left:3px solid #c2540a;background:#f6f6f6;padding:5px 9px}
+  #print img{max-width:100%;border:1px solid #bbb;break-inside:avoid;display:block}
+  #print .pfoot{margin-top:18px;font-size:8pt;color:#666;border-top:1px solid #ccc;padding-top:6px}
 </style>
 </head>
 <body>
@@ -175,6 +200,7 @@
         <h2 data-i18n="hAgent">Agent assessment</h2>
         <p class="summary" id="summary"></p>
         <ul class="find" id="findings"></ul>
+        <div class="sub" id="langhint" hidden style="margin-top:10px"></div>
       </div>
       <div class="panel">
         <h2 data-i18n="hScore">Deterministic risk score</h2>
@@ -217,6 +243,7 @@
       <h2 data-i18n="hExport">Export report</h2>
       <label class="gate"><input type="checkbox" id="approve"><span data-i18n="gate">I reviewed the evidence and approve exporting this report (analyst sign-off).</span></label>
       <div class="acts">
+        <button class="btn-ghost" id="dlp" type="button" disabled data-i18n="dlp">Export PDF</button>
         <button class="btn-ghost" id="dlj" type="button" disabled data-i18n="dlj">Download JSON</button>
         <button class="btn-ghost" id="dlh" type="button" disabled data-i18n="dlh">Download HTML</button>
       </div>
@@ -225,6 +252,8 @@
 
   <footer data-i18n="foot">Built for the Vultr Agent Rush - Track 01, Blast Radius Zero. Pages you submit are opened only inside an isolated sandbox. Be responsible: investigate only what you are allowed to.</footer>
 </div>
+
+<section id="print" aria-hidden="true"></section>
 
 <script>
 "use strict";
@@ -255,11 +284,20 @@ const I18N = {
     hIoc: "Indicators of compromise", cType: "Type", cValue: "Value", cNote: "Note", cWhy: "Why",
     hBlock: "Blocklist", copy: "copy", copied: "copied", hLog: "Containment log", hExport: "Export report",
     gate: "I reviewed the evidence and approve exporting this report (analyst sign-off).",
-    dlj: "Download JSON", dlh: "Download HTML", all: "All", network: "Network", file: "File", behavioral: "Behavioral",
+    dlp: "Export PDF", dlj: "Download JSON", dlh: "Download HTML", all: "All", network: "Network", file: "File", behavioral: "Behavioral",
     review: "Analyst review required: ", inj: "The page carried instructions aimed at AI analysts. They were treated as data and ignored.",
     agent: "agent", heuristic: "heuristic", none: "None observed", noBlock: "Nothing to block.",
+    langHint: "The agent's text was written in {l}. Run the investigation again to regenerate it in the current language.",
+    langName: { en: "English", es: "Spanish" },
     foot: "Built for the Vultr Agent Rush - Track 01, Blast Radius Zero. Pages you submit are opened only inside an isolated sandbox. Be responsible: investigate only what you are allowed to.",
     risk: { critical: "critical", high: "high", medium: "medium", low: "low", info: "no risk found" },
+    verdict: { malicious: "malicious", suspicious: "suspicious", benign: "benign", inconclusive: "inconclusive", no_indicators: "no indicators" },
+    sig: { credential_harvest_cross_domain: "credential harvest (cross-domain)", password_form: "password form", automatic_download: "automatic download",
+      raw_ip_requests: "raw IP requests", long_redirect_chain: "long redirect chain", internal_network_probe: "internal network probe", meta_refresh: "meta refresh", no_tls: "no TLS" },
+    notes: {},
+    pTitle: "Threat investigation report", pTarget: "Target", pGenerated: "Generated", pRisk: "Risk level", pAgent: "Agent verdict", pHeur: "Heuristic score",
+    pModel: "Model", pDur: "Duration", pSign: "Analyst sign-off", yes: "yes", pProbes: "Containment self-probes (run inside the sandbox)", pAddr: "Address", pStatus: "Result",
+    pFoot: "Generated by IoC Sentinel (Vultr Agent Rush, Blast Radius Zero). Indicators describe behavior observed in an isolated sandbox; ATT&CK mappings are indicative, not an attribution.",
     errRate: "Rate limit reached. Try again in", errGeneric: "Something went wrong",
   },
   es: {
@@ -271,16 +309,31 @@ const I18N = {
     hIoc: "Indicadores de compromiso", cType: "Tipo", cValue: "Valor", cNote: "Nota", cWhy: "Motivo",
     hBlock: "Lista de bloqueo", copy: "copiar", copied: "copiado", hLog: "Registro de contención", hExport: "Exportar reporte",
     gate: "Revisé la evidencia y apruebo exportar este reporte (visto bueno del analista).",
-    dlj: "Descargar JSON", dlh: "Descargar HTML", all: "Todo", network: "Red", file: "Archivo", behavioral: "Comportamiento",
+    dlp: "Exportar PDF", dlj: "Descargar JSON", dlh: "Descargar HTML", all: "Todo", network: "Red", file: "Archivo", behavioral: "Comportamiento",
     review: "Requiere revisión del analista: ", inj: "La página traía instrucciones dirigidas a analistas de IA. Se trataron como datos y se ignoraron.",
     agent: "agente", heuristic: "heurística", none: "Nada observado", noBlock: "Nada que bloquear.",
-    foot: "Hecho para Vultr Agent Rush - Track 01, Blast Radius Zero. Las páginas que envies se abren solo dentro de un sandbox aislado. Investiga solo lo que tengas permiso de investigar.",
-    risk: { critical: "critico", high: "alto", medium: "medio", low: "bajo", info: "sin riesgo" },
+    langHint: "El texto del agente se escribió en {l}. Vuelve a investigar para regenerarlo en el idioma actual.",
+    langName: { en: "inglés", es: "español" },
+    foot: "Hecho para Vultr Agent Rush - Track 01, Blast Radius Zero. Las páginas que envíes se abren solo dentro de un sandbox aislado. Investiga solo lo que tengas permiso de investigar.",
+    risk: { critical: "crítico", high: "alto", medium: "medio", low: "bajo", info: "sin riesgo" },
+    verdict: { malicious: "malicioso", suspicious: "sospechoso", benign: "benigno", inconclusive: "no concluyente", no_indicators: "sin indicadores" },
+    sig: { credential_harvest_cross_domain: "robo de credenciales (otro dominio)", password_form: "formulario de contraseña", automatic_download: "descarga automática",
+      raw_ip_requests: "peticiones a IP directa", long_redirect_chain: "cadena de redirecciones larga", internal_network_probe: "sondeo de red interna", meta_refresh: "meta refresh", no_tls: "sin TLS" },
+    notes: { "final landing URL": "URL final de destino", "redirect hop": "salto de redirección", "contacted by the page": "contactado por la página",
+      "server that answered": "servidor que respondió", "embedded frame": "frame incrustado", "password form": "formulario de contraseña",
+      "password form posting to a DIFFERENT domain": "formulario de contraseña que envía a OTRO dominio" },
+    pTitle: "Reporte de investigación de amenazas", pTarget: "Objetivo", pGenerated: "Generado", pRisk: "Nivel de riesgo", pAgent: "Veredicto del agente", pHeur: "Puntuación heurística",
+    pModel: "Modelo", pDur: "Duración", pSign: "Visto bueno del analista", yes: "sí", pProbes: "Autopruebas de contención (ejecutadas dentro del sandbox)", pAddr: "Dirección", pStatus: "Resultado",
+    pFoot: "Generado por IoC Sentinel (Vultr Agent Rush, Blast Radius Zero). Los indicadores describen el comportamiento observado en un sandbox aislado; el mapeo ATT&CK es indicativo, no una atribución.",
     errRate: "Límite alcanzado. Reintenta en", errGeneric: "Algo salió mal",
   },
 };
 let lang = store.get("lang") || ((navigator.language || "en").toLowerCase().startsWith("es") ? "es" : "en");
 const t = (k) => I18N[lang][k] ?? I18N.en[k] ?? k;
+// Bilingual fields from the API: "<field>" (English) and "<field>_es" (Spanish).
+const L = (obj, key) => (lang === "es" && obj && obj[key + "_es"] != null ? obj[key + "_es"] : obj ? obj[key] : undefined);
+const vt = (v) => (t("verdict")[v] ?? v ?? "-");
+const noteText = (n) => (lang === "es" ? (t("notes")[n] ?? String(n || "").replace(/^valid /, "válido ")) : n);
 
 function applyI18n() {
   document.documentElement.lang = lang;
@@ -321,7 +374,7 @@ $("f").addEventListener("submit", async (ev) => {
   const started = performance.now();
   const tick = setInterval(() => { $("elapsed").textContent = ((performance.now() - started) / 1000).toFixed(0) + "s"; }, 500);
   try {
-    const r = await fetch("/api/investigations?wait=false", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: $("url").value }) });
+    const r = await fetch("/api/investigations?wait=false&lang=" + lang, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: $("url").value }) });
     const j = await r.json().catch(() => ({}));
     if (r.status === 429) throw new Error(`${t("errRate")} ${r.headers.get("Retry-After") || "?"}s.`);
     if (!r.ok) throw new Error(j.detail || `${t("errGeneric")} (HTTP ${r.status})`);
@@ -356,34 +409,39 @@ function addLive(e, t0) {
 }
 
 /* ---------------------------------------------------------------- render */
+const sigLabel = (s) => t("sig")[s] ?? s.replaceAll("_", " ");
+
 function render(d) {
   const a = d.agent || {}, hz = d.heuristic || {}, rp = d.report || {};
   const risk = rp.risk_level || "info";
   const sev = $("sev"); sev.textContent = t("risk")[risk] || risk; sev.className = "sev sev-" + risk;
   $("target").textContent = d.url;
   const conf = a.confidence != null ? Math.round(a.confidence * 100) + "%" : "-";
-  $("metaLine").textContent = `${t("agent")}: ${a.verdict || "-"} (${conf})  ·  ${t("heuristic")}: ${hz.verdict || "-"}  ·  ${d.model}  ·  ${d.duration_s}s`;
-  const rv = $("review"); rv.hidden = !rp.review_required; rv.textContent = rp.review_required ? t("review") + (rp.review_reasons || []).join("; ") : "";
+  $("metaLine").textContent = `${t("agent")}: ${vt(a.verdict)} (${conf})  ·  ${t("heuristic")}: ${vt(hz.verdict)}  ·  ${d.model}  ·  ${d.duration_s}s`;
+  const reasons = L(rp, "review_reasons") || [];
+  const rv = $("review"); rv.hidden = !rp.review_required; rv.textContent = rp.review_required ? t("review") + reasons.join("; ") : "";
   const inj = $("inj"); inj.hidden = !a.prompt_injection_detected; inj.textContent = t("inj");
 
   $("summary").textContent = a.summary || "";
   $("findings").replaceChildren(...(a.findings || []).map((f) => h("li", { text: f })));
+  const hint = $("langhint"); const mismatch = d.lang && d.lang !== lang;
+  hint.hidden = !mismatch; hint.textContent = mismatch ? t("langHint").replace("{l}", I18N[lang].langName[d.lang] || d.lang) : "";
   $("score").textContent = hz.score ?? 0; $("bar").style.width = (hz.score || 0) + "%";
   const sg = hz.signals || [];
   $("signals").replaceChildren(...(sg.length ? sg.map((s) => h("tr", null,
-    h("td", { class: "pts", text: "+" + s.points }), h("td", { text: s.signal.replaceAll("_", " ") }), h("td", { class: "v", text: s.detail })))
+    h("td", { class: "pts", text: "+" + s.points }), h("td", { text: sigLabel(s.signal) }), h("td", { class: "v", text: L(s, "detail") })))
     : [h("tr", null, h("td", { text: t("none") }))]));
 
-  $("actions").replaceChildren(...(rp.recommended_actions || []).map((x) => h("li", { text: x })));
+  $("actions").replaceChildren(...(L(rp, "recommended_actions") || []).map((x) => h("li", { text: x })));
   const tech = rp.techniques || [];
-  $("tech").replaceChildren(...(tech.length ? tech.map((x) => h("div", { class: "tg", title: x.evidence }, h("b", { text: x.id }), x.name)) : [h("span", { class: "sub", text: t("none") })]));
+  $("tech").replaceChildren(...(tech.length ? tech.map((x) => h("div", { class: "tg", title: L(x, "evidence") }, h("b", { text: x.id }), x.name)) : [h("span", { class: "sub", text: t("none") })]));
 
   const sid = (d.scan_ids || [])[0];
   if (sid) $("shot").src = "/api/scans/" + encodeURIComponent(sid) + "/screenshot.png"; else $("shot").removeAttribute("src");
 
   renderIocs(d);
   const bl = rp.blocklist || [];
-  $("block").replaceChildren(...(bl.length ? bl.map((b) => h("tr", null, h("td", null, h("span", { class: "tag", text: b.type })), h("td", { class: "v", text: b.value }), h("td", { text: b.reason })))
+  $("block").replaceChildren(...(bl.length ? bl.map((b) => h("tr", null, h("td", null, h("span", { class: "tag", text: b.type })), h("td", { class: "v", text: b.value }), h("td", { text: L(b, "reason") })))
     : [h("tr", null, h("td", { colspan: 3, text: t("noBlock") }))]));
   $("cpBlock").onclick = () => copy(bl.map((b) => `${b.type},${b.value}`).join("\n"), $("cpBlock"));
 
@@ -395,7 +453,9 @@ function render(d) {
     else row.append(h("span", { class: "tm", text: JSON.stringify(rest).slice(0, 150) }));
     return row;
   }));
-  $("out").hidden = false; $("out").scrollIntoView?.({ behavior: "smooth", block: "start" });
+  const wasHidden = $("out").hidden;
+  $("out").hidden = false;
+  if (wasHidden) $("out").scrollIntoView?.({ behavior: "smooth", block: "start" });
 }
 
 function renderIocs(d) {
@@ -409,7 +469,7 @@ function renderIocs(d) {
   const rows = iocs.filter((i) => activeTab === "all" || i.category === activeTab);
   $("iocs").replaceChildren(...rows.map((i) => {
     const cp = h("button", { class: "cp", type: "button", text: t("copy") }); cp.addEventListener("click", () => copy(i.value, cp));
-    return h("tr", null, h("td", null, h("span", { class: "tag", text: i.type })), h("td", { class: "v" }, i.value, " ", cp), h("td", { text: i.note }));
+    return h("tr", null, h("td", null, h("span", { class: "tag", text: i.type })), h("td", { class: "v" }, i.value, " ", cp), h("td", { text: noteText(i.note) }));
   }));
 }
 
@@ -421,27 +481,75 @@ function copy(text, btn) {
 }
 
 /* ---------------------------------------------------------------- export (analyst approval gate) */
-function syncExport() { const on = $("approve").checked && !!current; $("dlj").disabled = !on; $("dlh").disabled = !on; }
+function syncExport() { const on = $("approve").checked && !!current; $("dlp").disabled = !on; $("dlj").disabled = !on; $("dlh").disabled = !on; }
 $("approve").addEventListener("change", syncExport);
 
 function download(name, mime, text) {
   const a = h("a"); a.href = URL.createObjectURL(new Blob([text], { type: mime })); a.download = name; a.click(); URL.revokeObjectURL(a.href);
 }
 $("dlj").addEventListener("click", () => download(`ioc-report-${current.investigation_id}.json`, "application/json", JSON.stringify(current, null, 2)));
+
+/* PDF: a dedicated, print-only report (see <style id="printcss">) rendered in the current language, then the browser's
+   "Save as PDF". Selectable text, no third-party library, works offline. */
+function buildPrint(d) {
+  const a = d.agent || {}, hz = d.heuristic || {}, rp = d.report || {};
+  const root = $("print"); root.replaceChildren();
+  const sec = (title) => root.append(h("h2", { text: title }));
+  const table = (head, rows, cls) => h("table", cls ? { class: cls } : null,
+    head ? h("thead", null, h("tr", null, ...head.map((x) => h("th", { text: x })))) : null,
+    h("tbody", null, ...rows.map((r) => h("tr", null, ...r.map((c, i) => h("td", { class: i === 1 ? "v" : "", text: c }))))));
+
+  root.append(h("div", { class: "brandline", text: "IoC Sentinel" }), h("h1", { text: t("pTitle") }));
+  root.append(h("div", { class: "sevrow" }, h("span", { class: "sev sev-" + (rp.risk_level || "info"), text: t("risk")[rp.risk_level || "info"] }), h("span", { class: "tgt", text: d.url })));
+  root.append(table(null, [
+    [t("pGenerated"), new Date().toLocaleString(lang === "es" ? "es" : "en")],
+    [t("pRisk"), t("risk")[rp.risk_level || "info"]],
+    [t("pAgent"), `${vt(a.verdict)} (${a.confidence != null ? Math.round(a.confidence * 100) + "%" : "-"})`],
+    [t("pHeur"), `${vt(hz.verdict)} - ${hz.score ?? 0}/100`],
+    [t("pModel"), `${d.model}  ·  ${d.duration_s}s`],
+    [t("pSign"), t("yes")],
+  ], "kv"));
+  if (rp.review_required) root.append(h("p", { class: "flag", text: t("review") + (L(rp, "review_reasons") || []).join("; ") }));
+  if (a.prompt_injection_detected) root.append(h("p", { class: "flag", text: t("inj") }));
+
+  sec(t("hAgent")); root.append(h("p", { text: a.summary || "" }), h("ul", null, ...(a.findings || []).map((f) => h("li", { text: f }))));
+  sec(t("hScore")); root.append(table(["pts", t("cType"), t("cNote")], (hz.signals || []).map((s) => ["+" + s.points, sigLabel(s.signal), L(s, "detail")])));
+  sec(t("hActions")); root.append(h("ol", null, ...(L(rp, "recommended_actions") || []).map((x) => h("li", { text: x }))));
+  sec(t("hTech")); root.append(h("ul", null, ...(rp.techniques || []).map((x) => h("li", { text: `${x.id}  ${x.name} - ${L(x, "evidence")}` }))));
+  sec(t("hBlock")); root.append(table([t("cType"), t("cValue"), t("cWhy")], (rp.blocklist || []).map((b) => [b.type, b.value, L(b, "reason")])));
+  sec(t("hIoc")); root.append(table([t("cType"), t("cValue"), t("cNote")], (d.iocs || []).map((i) => [i.type, i.value, noteText(i.note)])));
+  const probes = (d.containment_log || []).filter((e) => e.kind === "containment_probe");
+  sec(t("pProbes")); root.append(table([t("cType"), t("pAddr"), t("pStatus")], probes.map((p) => [p.target, p.addr, p.status])));
+  const sid = (d.scan_ids || [])[0];
+  if (sid) { sec(t("hShot")); root.append(h("img", { src: "/api/scans/" + encodeURIComponent(sid) + "/screenshot.png", alt: "" })); }
+  root.append(h("p", { class: "pfoot", text: t("pFoot") }));
+  return root;
+}
+
+$("dlp").addEventListener("click", () => {
+  buildPrint(current);
+  const old = document.title; document.title = `ioc-report-${current.investigation_id}`;
+  const restore = () => { document.title = old; window.removeEventListener("afterprint", restore); };
+  window.addEventListener("afterprint", restore);
+  window.print();
+});
+// Debug/QA hook: show the print layout on screen without opening the print dialog.
+window.__printPreview = (on) => { $("printcss").media = on ? "all" : "print"; if (on && current) buildPrint(current); };
+
 $("dlh").addEventListener("click", () => {
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const d = current, a = d.agent, r = d.report, hz = d.heuristic;
   const li = (arr) => (arr || []).map((x) => `<li>${esc(x)}</li>`).join("");
-  const rows = (arr, cols) => (arr || []).map((x) => `<tr>${cols.map((c) => `<td>${esc(x[c])}</td>`).join("")}</tr>`).join("");
-  const html = `<!doctype html><meta charset="utf-8"><title>IoC report ${esc(d.url)}</title>
+  const rows = (arr, cols) => (arr || []).map((x) => `<tr>${cols.map((c) => `<td>${esc(L(x, c))}</td>`).join("")}</tr>`).join("");
+  const html = `<!doctype html><html lang="${lang}"><meta charset="utf-8"><title>IoC report ${esc(d.url)}</title>
 <style>body{font:14px/1.5 system-ui;max-width:920px;margin:24px auto;padding:0 16px;color:#111}td,th{border-bottom:1px solid #ddd;padding:4px 8px;text-align:left;word-break:break-all;vertical-align:top}h2{margin-top:26px}</style>
-<h1>IoC Sentinel report</h1>
-<p><b>Target:</b> ${esc(d.url)}<br><b>Risk:</b> ${esc(r.risk_level)} &middot; <b>Agent:</b> ${esc(a.verdict)} (${esc(a.confidence)}) &middot; <b>Heuristic:</b> ${esc(hz.verdict)} ${esc(hz.score)}/100<br><b>Model:</b> ${esc(d.model)} &middot; <b>Analyst approved export:</b> yes</p>
+<h1>${esc(t("pTitle"))}</h1>
+<p><b>${esc(t("pTarget"))}:</b> ${esc(d.url)}<br><b>${esc(t("pRisk"))}:</b> ${esc(t("risk")[r.risk_level])} &middot; <b>${esc(t("pAgent"))}:</b> ${esc(vt(a.verdict))} (${esc(a.confidence)}) &middot; <b>${esc(t("pHeur"))}:</b> ${esc(vt(hz.verdict))} ${esc(hz.score)}/100<br><b>${esc(t("pModel"))}:</b> ${esc(d.model)} &middot; <b>${esc(t("pSign"))}:</b> ${esc(t("yes"))}</p>
 <p>${esc(a.summary)}</p><ul>${li(a.findings)}</ul>
-<h2>Recommended actions</h2><ol>${li(r.recommended_actions)}</ol>
-<h2>MITRE ATT&amp;CK (indicative)</h2><ul>${(r.techniques || []).map((x) => `<li>${esc(x.id)} ${esc(x.name)} &mdash; ${esc(x.evidence)}</li>`).join("")}</ul>
-<h2>Blocklist</h2><table><tr><th>Type</th><th>Value</th><th>Why</th></tr>${rows(r.blocklist, ["type", "value", "reason"])}</table>
-<h2>Indicators of compromise</h2><table><tr><th>Type</th><th>Value</th><th>Category</th><th>Note</th></tr>${rows(d.iocs, ["type", "value", "category", "note"])}</table>`;
+<h2>${esc(t("hActions"))}</h2><ol>${li(L(r, "recommended_actions"))}</ol>
+<h2>${esc(t("hTech"))}</h2><ul>${(r.techniques || []).map((x) => `<li>${esc(x.id)} ${esc(x.name)} &mdash; ${esc(L(x, "evidence"))}</li>`).join("")}</ul>
+<h2>${esc(t("hBlock"))}</h2><table><tr><th>${esc(t("cType"))}</th><th>${esc(t("cValue"))}</th><th>${esc(t("cWhy"))}</th></tr>${rows(r.blocklist, ["type", "value", "reason"])}</table>
+<h2>${esc(t("hIoc"))}</h2><table><tr><th>${esc(t("cType"))}</th><th>${esc(t("cValue"))}</th><th>${esc(t("cNote"))}</th></tr>${(d.iocs || []).map((i) => `<tr><td>${esc(i.type)}</td><td>${esc(i.value)}</td><td>${esc(noteText(i.note))}</td></tr>`).join("")}</table>`;
   download(`ioc-report-${d.investigation_id}.html`, "text/html", html);
 });
 

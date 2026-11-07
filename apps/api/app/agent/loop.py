@@ -56,8 +56,12 @@ def _parse_final(text: str) -> dict | None:
         return None
 
 
-def investigate(url: str, emit: Callable[[dict], None] | None = None) -> dict:
-    """Run the full investigation. Blocking: call it from a threadpool."""
+def investigate(url: str, emit: Callable[[dict], None] | None = None, lang: str = "en") -> dict:
+    """Run the full investigation. Blocking: call it from a threadpool.
+
+    lang ("en"|"es") only controls the language of the agent's own summary/findings; the rest of the report is bilingual.
+    """
+    lang = "es" if lang == "es" else "en"
     emit = emit or (lambda e: None)
     t0 = time.time()
     client = InferenceClient()
@@ -70,7 +74,9 @@ def investigate(url: str, emit: Callable[[dict], None] | None = None) -> dict:
         emit(ev)
 
     messages: list[dict] = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": SYSTEM_PROMPT + (
+            "\n\nLanguage: write \"summary\" and every item of \"findings\" in SPANISH. Keep JSON keys and the verdict values in English."
+            if lang == "es" else "")},
         {"role": "user", "content": f"Investigate this target: {url}"},
     ]
     log("agent_start", model=client.model, url=url)
@@ -129,6 +135,7 @@ def investigate(url: str, emit: Callable[[dict], None] | None = None) -> dict:
     return {
         "url": url,
         "model": client.model,
+        "lang": lang,
         "scan_ids": ctx.scan_ids,
         "agent": agent,
         "heuristic": heuristic,

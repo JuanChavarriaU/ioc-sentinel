@@ -18,7 +18,7 @@ An analyst pastes a URL. A tool-calling agent running on **Vultr Serverless Infe
 2. `dns_lookup`, `cert_transparency` (crt.sh), `urlhaus_host` (abuse.ch) - host-side threat-intel tools that hold credentials the sandbox never sees.
 3. Deterministic code extracts **typed IoCs** and a **risk score** (so the evidence is reproducible and does not depend on the LLM).
 4. A deterministic **report** is built from the evidence: risk level, MITRE ATT&CK techniques (indicative), recommended actions, a blocklist, and an automatic **analyst-review flag** when the agent and the heuristics disagree.
-5. The dashboard streams the agent's steps live, then shows the verdict, the heuristic score, a screenshot taken inside the sandbox, the Containment Log, and filterable/copyable IoCs. Export (JSON/HTML) is gated behind an **analyst approval** checkbox (human in the loop). English/Spanish and light/dark.
+5. The dashboard streams the agent's steps live, then shows the verdict, the heuristic score, a screenshot taken inside the sandbox, the Containment Log, and filterable/copyable IoCs. Export (**PDF**, JSON, HTML) is gated behind an **analyst approval** checkbox (human in the loop). Fully bilingual English/Spanish (UI, report and the agent's own text) and light/dark.
 
 ### Verified result (against the public fixture)
 
@@ -100,7 +100,7 @@ Manual steps and details: [docs/INFRA.md](docs/INFRA.md), [docs/DIA1.md](docs/DI
 |---|---|---|
 | `GET` | `/` | Dashboard |
 | `POST` | `/api/investigations` `{"url": ...}` | Full agent run, blocking (`?wait=true`, default) → verdict, heuristic, `report`, IoCs, containment log |
-| `POST` | `/api/investigations?wait=false` | Returns `{investigation_id, status:"running"}` at once (used by the dashboard) |
+| `POST` | `/api/investigations?wait=false&lang=es` | Returns `{investigation_id, status:"running"}` at once (used by the dashboard). `lang=en|es` sets the language of the agent's own summary; actions, signals and blocklist reasons are returned in both languages (`*_es` fields) |
 | `GET` | `/api/investigations/{id}` | `status: running` + live `events`, or `done` + the full result |
 | `POST` | `/api/scans` | Sandbox only (no LLM) |
 | `GET` | `/api/scans/{id}/screenshot.png` · `/session.har` | Evidence (HAR has metadata only, no bodies) |
@@ -152,7 +152,13 @@ Real problems hit while building this; each one is fixed in the repo.
 12. **Chromium blocks `http://` sub-requests from an `https://` page (mixed content)** before they reach the network, so the
     fixture's metadata/VPC probes show up as `mixed-content` failures, not as jail rejections. The jail itself is proven by the
     in-sandbox self-probes; to demo the jail with real page-originated probes, serve the fixture over plain `http://`.
-13. **Don't trust the first model answer.** The agent output must be parsed defensively (`<think>` blocks, code fences,
+13. **PDF = print stylesheet, not a library.** A dedicated print-only DOM (`#print` + `<style media=print>`) is rendered in the
+    current language and exported with the browser's *Save as PDF*: selectable text, offline, no third-party JS. Check it without
+    the dialog via `__printPreview(true)` in the console.
+14. **Validate the output, not just the plumbing.** Opening the report in both languages caught raw epoch timestamps in the TLS
+    certificate note (now dates) and an agent text that stayed English after switching language (now generated per `lang`, with a
+    hint when it differs from the UI language).
+15. **Don't trust the first model answer.** The agent output must be parsed defensively (`<think>` blocks, code fences,
     bad tool arguments); the IoC list and score are computed deterministically and shown beside the verdict.
 
 ## Status

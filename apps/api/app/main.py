@@ -69,11 +69,12 @@ async def create_scan(req: ScanRequest, request: Request):
 
 
 @app.post("/api/investigations")
-async def create_investigation(req: ScanRequest, request: Request, wait: bool = True):
+async def create_investigation(req: ScanRequest, request: Request, wait: bool = True, lang: str = "en"):
     """Full agent run: LLM (Vultr Serverless Inference) + sandboxed scan + host-side threat intel.
 
     wait=true (default): block and return the finished result.
     wait=false: return {investigation_id, status:"running"} at once; poll GET /api/investigations/{id}.
+    lang=en|es: language of the agent's own summary/findings (the rest of the report is bilingual).
     """
     try:
         target = normalize_target(req.url)
@@ -88,7 +89,7 @@ async def create_investigation(req: ScanRequest, request: Request, wait: bool = 
     if wait:  # blocking mode (curl / scripts): returns the finished result
         async with _SLOTS:
             try:
-                result = await run_in_threadpool(investigate, target)
+                result = await run_in_threadpool(investigate, target, None, lang)
             except RuntimeError as exc:  # e.g. inference key not configured
                 raise HTTPException(503, str(exc))
         return _persist(inv_id, result)
@@ -103,7 +104,7 @@ async def create_investigation(req: ScanRequest, request: Request, wait: bool = 
     async def runner() -> None:
         async with _SLOTS:
             try:
-                result = await run_in_threadpool(investigate, target, job["events"].append)
+                result = await run_in_threadpool(investigate, target, job["events"].append, lang)
                 job["result"] = _persist(inv_id, result)
                 job["status"] = "done"
             except Exception as exc:  # surface any failure to the polling client

@@ -9,6 +9,7 @@ verdict is shown next to it. IoC categories follow the usual forensic grouping
 from __future__ import annotations
 
 import ipaddress
+from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 INTERNAL_PREFIXES = ("169.254.", "10.", "192.168.", "127.", "172.16.", "172.17.", "172.30.")
@@ -27,6 +28,14 @@ def _is_ip(value: str) -> bool:
         return True
     except ValueError:
         return False
+
+
+def _day(ts) -> str:
+    """Playwright reports certificate validity as epoch seconds; show a plain date."""
+    try:
+        return datetime.fromtimestamp(float(ts), tz=timezone.utc).strftime("%Y-%m-%d")
+    except (TypeError, ValueError, OverflowError, OSError):
+        return str(ts)
 
 
 def _registrable(host: str) -> str:
@@ -58,7 +67,7 @@ def extract_iocs(obs: dict) -> list[dict]:
     tls = obs.get("tls") or {}
     if tls:
         add("tls-cert", f"{tls.get('issuer', '?')} | {tls.get('subjectName', '?')}", "network", "tls",
-            f"valid {tls.get('validFrom')} -> {tls.get('validTo')}")
+            f"valid {_day(tls.get('validFrom'))} -> {_day(tls.get('validTo'))}")
     for d in obs.get("downloads") or []:
         if d.get("sha256"):
             add("sha256", d["sha256"], "file", "downloads", d.get("suggested_filename") or "")
@@ -81,8 +90,8 @@ def score(obs: dict) -> dict:
     """Additive heuristic. Returns {score, verdict, signals:[{signal, points, detail}]}."""
     signals: list[dict] = []
 
-    def sig(name: str, pts: int, detail: str) -> None:
-        signals.append({"signal": name, "points": pts, "detail": detail})
+    def sig(name: str, pts: int, detail: str, detail_es: str | None = None) -> None:
+        signals.append({"signal": name, "points": pts, "detail": detail, "detail_es": detail_es or detail})
 
     dom = obs.get("dom") or {}
     final_url = obs.get("final_url") or ""
@@ -91,24 +100,28 @@ def score(obs: dict) -> dict:
     for f in dom.get("forms") or []:
         if f.get("has_password"):
             if _registrable(_host(f.get("action") or "")) != page_domain:
-                sig("credential_harvest_cross_domain", 45, f"password form posts to {f.get('action')}")
+                sig("credential_harvest_cross_domain", 45, f"password form posts to {f.get('action')}",
+                    f"el formulario de contraseña envía los datos a {f.get('action')}")
             else:
-                sig("password_form", 10, "page asks for a password")
+                sig("password_form", 10, "page asks for a password", "la página pide una contraseña")
     if obs.get("downloads"):
-        sig("automatic_download", 30, f"{len(obs['downloads'])} file(s) downloaded without interaction")
+        sig("automatic_download", 30, f"{len(obs['downloads'])} file(s) downloaded without interaction",
+            f"{len(obs['downloads'])} archivo(s) descargado(s) sin interacción")
     if obs.get("ip_literal_hosts"):
-        sig("raw_ip_requests", 15, f"requests to raw IPs: {', '.join(obs['ip_literal_hosts'][:5])}")
+        ips = ", ".join(obs["ip_literal_hosts"][:5])
+        sig("raw_ip_requests", 15, f"requests to raw IPs: {ips}", f"peticiones a IPs directas: {ips}")
     chain = obs.get("redirect_chain") or []
     if len(chain) > 3:
-        sig("long_redirect_chain", 10, f"{len(chain)} hops")
+        sig("long_redirect_chain", 10, f"{len(chain)} hops", f"{len(chain)} saltos")
     internal = [r["url"] for r in (obs.get("requests") or []) + (obs.get("failed_requests") or [])
                 if _host(r.get("url", "")) .startswith(INTERNAL_PREFIXES)]
     if internal:
-        sig("internal_network_probe", 35, f"page tried internal/metadata targets, e.g. {internal[0][:80]}")
+        sig("internal_network_probe", 35, f"page tried internal/metadata targets, e.g. {internal[0][:80]}",
+            f"la página intentó alcanzar destinos internos/metadata, p. ej. {internal[0][:80]}")
     if dom.get("meta_refresh"):
         sig("meta_refresh", 5, f"meta refresh: {dom['meta_refresh'][:80]}")
     if (obs.get("tls") is None) and final_url.startswith("http://"):
-        sig("no_tls", 5, "final page served without TLS")
+        sig("no_tls", 5, "final page served without TLS", "la página final se sirvió sin TLS")
 
     total = min(100, sum(s["points"] for s in signals))
     verdict = "malicious" if total >= 60 else "suspicious" if total >= 25 else "no_indicators"
