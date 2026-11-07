@@ -26,6 +26,8 @@ Built for the **Vultr Agent Rush Hackathon - Track 01 · Blast Radius Zero**.
 Anything that *touches the suspicious target* runs in the sandbox, which has zero secrets and a jailed network.
 Page content returned by the sandbox is treated as untrusted data (prompt-injection aware).
 
+Full architecture, threat model, containment layers and Vultr service map: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (Spanish).
+
 ## What the sandbox returns (per URL)
 
 - Screenshot (PNG) and HAR (metadata only, no bodies)
@@ -71,3 +73,7 @@ make api                               # then `make tf-tunnel` from the laptop -
 - [ ] Day 3 - IoC consolidation, phishing signals, STIX 2.1 / JSON / HTML report
 - [ ] Day 4 - Dashboard with live Containment Log, gVisor by default
 - [ ] Day 5 - Demo traps, video, submission
+
+## License
+
+MIT - see [LICENSE](LICENSE).
