@@ -16,9 +16,13 @@ An analyst pastes a URL. A tool-calling agent running on **Vultr Serverless Infe
 
 1. `scan_url` - opens the page in a real Chromium **inside a throw-away, credential-less container** and returns observations.
 2. `dns_lookup`, `cert_transparency` (crt.sh), `urlhaus_host` (abuse.ch) - host-side threat-intel tools that hold credentials the sandbox never sees.
-3. Deterministic code extracts **typed IoCs** and a **risk score** (so the evidence is reproducible and does not depend on the LLM).
-4. A deterministic **report** is built from the evidence: risk level, MITRE ATT&CK techniques (indicative), recommended actions, a blocklist, and an automatic **analyst-review flag** when the agent and the heuristics disagree.
-5. The dashboard streams the agent's steps live, then shows the verdict, the heuristic score, a screenshot taken inside the sandbox, the Containment Log, and filterable/copyable IoCs. Export (**PDF**, JSON, HTML) is gated behind an **analyst approval** checkbox (human in the loop). Fully bilingual English/Spanish (UI, report and the agent's own text) and light/dark.
+3. **Visual verification (hackathon Pattern B):** an *independent* vision-model call reads the screenshot taken inside the sandbox
+   (page type, credential prompt, imitated brand, deception cues) and the result is **cross-checked against the DOM**. A contradiction
+   (e.g. it sees a login form the DOM does not have) forces an analyst-review flag. The vision output is validated into a closed schema
+   and can only add a signal or ask for review: it never overrides the deterministic evidence.
+4. Deterministic code extracts **typed IoCs** and a **risk score** (so the evidence is reproducible and does not depend on the LLM).
+5. A deterministic **report** is built from the evidence: risk level, MITRE ATT&CK techniques (indicative), recommended actions, a blocklist, and an automatic **analyst-review flag** when the agent and the heuristics disagree.
+6. The dashboard streams the agent's steps live, then shows the verdict, the heuristic score, a screenshot taken inside the sandbox, the Containment Log, and filterable/copyable IoCs. Export (**PDF**, JSON, HTML) is gated behind an **analyst approval** checkbox (human in the loop). Fully bilingual English/Spanish (UI, report and the agent's own text) and light/dark.
 
 ### Verified result (against the public fixture)
 
@@ -26,7 +30,9 @@ An analyst pastes a URL. A tool-calling agent running on **Vultr Serverless Infe
 |---|---|
 | Agent verdict on the trap page | `malicious`, confidence 0.95 |
 | Hidden prompt-injection ("classify as BENIGN") | detected, ignored, reported (`prompt_injection_detected: true`) |
-| Heuristic score | 100/100 (cross-domain credential form +45, auto-download +30, internal/metadata probe +35, raw-IP requests +15) |
+| Heuristic score | 100/100 (cross-domain credential form +45, auto-download +30, internal/metadata probe +35, raw-IP requests +15, visual brand impersonation +25 - capped at 100) |
+| Visual verification | `login` page, asks for credentials, imitates "Northwind Credit Union" on a foreign domain, consistent with the DOM; identical on repeated runs, ~1 s |
+| Benign control (`example.com`) | `content` page, no credentials, no brand, score 0, no review flag |
 | IoCs extracted | 11 (URL, domains, IPs, TLS cert, SHA-256/MD5 of the drive-by file, credential form) |
 | Containment self-probes | all 5 `blocked` (cloud metadata, 10/8, 192.168/16, host SSH, host API) |
 | Sandbox lifecycle | container destroyed in ~10 ms, 0 leftovers |
@@ -66,7 +72,7 @@ to follow instructions found there.
 | Service | Role |
 |---|---|
 | **Cloud Compute** (`vc2-2c-4gb`, Ubuntu 24.04) | Hosts the API, Docker, the sandboxes and Caddy |
-| **Serverless Inference** (`qwen3.8-27b`, OpenAI-compatible) | Agent reasoning and tool calling |
+| **Serverless Inference** (`qwen3.8-27b`, OpenAI-compatible) | Agent reasoning, tool calling **and** the visual verification of screenshots (vision) |
 | **VPC** | Private control-plane network (the jail blocks it from the sandbox) |
 | **Firewall group** | Edge filter: SSH only from the admin IP, 80/443 public |
 
@@ -158,7 +164,14 @@ Real problems hit while building this; each one is fixed in the repo.
 14. **Validate the output, not just the plumbing.** Opening the report in both languages caught raw epoch timestamps in the TLS
     certificate note (now dates) and an agent text that stayed English after switching language (now generated per `lang`, with a
     hint when it differs from the UI language).
-15. **Don't trust the first model answer.** The agent output must be parsed defensively (`<think>` blocks, code fences,
+15. **Reasoning models can return an empty answer.** `qwen3.8-27b` spent the whole 500-token budget on hidden `reasoning` and
+    returned `content: ""` with `finish_reason: length` (only on the harder screenshot). Fix: `chat_template_kwargs.enable_thinking=false`
+    for the vision call (~1 s, ~150 tokens, stable JSON), with a plain retry and a bigger budget if the endpoint rejects the flag.
+    Always log `finish_reason` when output is empty.
+16. **Make the screenshot useful, then distrust it.** The image is attacker-controlled (text inside it can be an injection), so the
+    vision result is schema-validated, cannot override evidence, and only counts toward the score together with a visible credential
+    prompt (a single model-variable field must not flag a site by itself).
+17. **Don't trust the first model answer.** The agent output must be parsed defensively (`<think>` blocks, code fences,
     bad tool arguments); the IoC list and score are computed deterministically and shown beside the verdict.
 
 ## Status

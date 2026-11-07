@@ -19,6 +19,11 @@ class Settings:
     inference_api_key: str | None = _env("VULTR_INFERENCE_API_KEY")
     agent_model: str = _env("AGENT_MODEL", "qwen3.8-27b")
 
+    # --- Visual verification (Pattern B: a vision model verifies the screenshot) ---
+    vision_enabled: bool = _env("VISION_ENABLED", "1") not in ("0", "false", "no")
+    vision_model: str | None = _env("VISION_MODEL")  # defaults to AGENT_MODEL (qwen3.8-27b supports vision)
+    vision_timeout_s: float = float(_env("VISION_TIMEOUT_S", "20"))
+
     # --- Host-side threat intel (optional; tools degrade gracefully without keys) ---
     abusech_auth_key: str | None = _env("ABUSECH_AUTH_KEY")
     agent_max_steps: int = int(_env("AGENT_MAX_STEPS", "6"))

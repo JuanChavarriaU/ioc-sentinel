@@ -57,7 +57,7 @@ def _host(url: str) -> str:
         return ""
 
 
-def build_report(agent: dict, heuristic: dict, iocs: list[dict], target_url: str) -> dict:
+def build_report(agent: dict, heuristic: dict, iocs: list[dict], target_url: str, visual: dict | None = None) -> dict:
     a_level = _ORDER.get(str(agent.get("verdict", "inconclusive")).lower(), 1)
     h_level = _ORDER.get(str(heuristic.get("verdict", "no_indicators")).lower(), 0)
     level = max(a_level, h_level)
@@ -83,6 +83,21 @@ def build_report(agent: dict, heuristic: dict, iocs: list[dict], target_url: str
         review_reasons.append((f"low agent confidence ({confidence:.2f})", f"baja confianza del agente ({confidence:.2f})"))
     if level == 1:
         review_reasons.append(("agent could not reach a verdict", "el agente no logró emitir un veredicto"))
+
+    # Cross-check the vision model against the DOM evidence. A mismatch means one of them is being fooled.
+    visual_check: dict = {"available": False}
+    if visual and visual.get("available"):
+        dom_pw = "credential_harvest_cross_domain" in signals or "password_form" in signals
+        vis_pw = bool(visual.get("asks_for_credentials"))
+        consistent = dom_pw == vis_pw
+        visual_check = {"available": True, "consistent_with_dom": consistent, "dom_has_password_form": dom_pw,
+                        "vision_sees_credential_prompt": vis_pw}
+        if not consistent:
+            review_reasons.append((
+                f"visual check {'sees' if vis_pw else 'does not see'} a credential prompt but the DOM {'has' if dom_pw else 'has no'} password form",
+                f"la verificación visual {'ve' if vis_pw else 'no ve'} un pedido de credenciales pero el DOM {'tiene' if dom_pw else 'no tiene'} formulario de contraseña"))
+    elif visual:
+        visual_check = {"available": False, "reason": visual.get("reason")}
 
     techniques = []
     for name, (tid, tname) in TECHNIQUES.items():
@@ -127,12 +142,17 @@ def build_report(agent: dict, heuristic: dict, iocs: list[dict], target_url: str
     pairs = [ACTIONS[k] for k in ACTIONS if k in signals]
     if agent.get("prompt_injection_detected"):
         pairs.append(ACTION_INJECTION)
+    if visual and visual.get("available") and visual.get("brand_impersonated") and visual.get("brand_domain_mismatch"):
+        b = visual["brand_impersonated"]
+        pairs.append((f"The page visually imitates '{b}'. Report it to that organization's abuse/brand-protection contact.",
+                      f"La página imita visualmente a '{b}'. Repórtala al contacto de abuso/protección de marca de esa organización."))
     pairs.append(ACTION_WATCHLIST if level >= 2 else ACTION_NONE)
 
     return {
         "risk_level": risk,
         "consensus": {"verdict": _NAME[level], "agent": agent.get("verdict"), "heuristic": heuristic.get("verdict"),
                       "agree": agree},
+        "visual_check": visual_check,
         "review_required": bool(review_reasons),
         "review_reasons": [r[0] for r in review_reasons],
         "review_reasons_es": [r[1] for r in review_reasons],

@@ -86,7 +86,7 @@ def extract_iocs(obs: dict) -> list[dict]:
     return iocs
 
 
-def score(obs: dict) -> dict:
+def score(obs: dict, visual: dict | None = None) -> dict:
     """Additive heuristic. Returns {score, verdict, signals:[{signal, points, detail}]}."""
     signals: list[dict] = []
 
@@ -122,6 +122,15 @@ def score(obs: dict) -> dict:
         sig("meta_refresh", 5, f"meta refresh: {dom['meta_refresh'][:80]}")
     if (obs.get("tls") is None) and final_url.startswith("http://"):
         sig("no_tls", 5, "final page served without TLS", "la página final se sirvió sin TLS")
+
+    # Vision model (independent of the DOM): a page that visually imitates a brand its domain does not belong to.
+    if visual and visual.get("available") and visual.get("brand_impersonated") and visual.get("brand_domain_mismatch"):
+        brand, host = visual["brand_impersonated"], _host(final_url) or "?"
+        # Strong only together with a visible credential prompt: that is the phishing pattern, and it keeps a single
+        # (model-variable) field from flagging a site on its own.
+        pts = 25 if visual.get("asks_for_credentials") else 10
+        sig("visual_brand_impersonation", pts, f"the page visually imitates '{brand}' but is hosted on {host}",
+            f"la página imita visualmente a '{brand}' pero está alojada en {host}")
 
     total = min(100, sum(s["points"] for s in signals))
     verdict = "malicious" if total >= 60 else "suspicious" if total >= 25 else "no_indicators"

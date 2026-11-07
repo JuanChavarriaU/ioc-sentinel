@@ -19,6 +19,7 @@ import httpx
 from ..config import settings
 from ..sandbox.runner import SandboxRun, run_in_sandbox, save_artifacts
 from ..sandbox.url_guard import UnsafeTarget
+from .vision import verify_screenshot
 
 DOMAIN_RE = re.compile(r"^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
 
@@ -76,6 +77,8 @@ class ToolContext:
     events: list[dict] = field(default_factory=list)
     lock: threading.Lock = field(default_factory=threading.Lock)  # tools may run in parallel
     scans_reserved: int = 0
+    lang: str = "en"
+    visuals: dict = field(default_factory=dict)  # scan_id -> visual verification
 
     @property
     def last_obs(self) -> dict:
@@ -87,7 +90,7 @@ def _clean_domain(value: str) -> str | None:
     return v if DOMAIN_RE.match(v) else None
 
 
-def _condense(run: SandboxRun) -> dict:
+def _condense(run: SandboxRun, visual: dict | None = None) -> dict:
     o = run.result or {}
     dom = o.get("dom") or {}
     tls = o.get("tls") or {}
@@ -110,6 +113,7 @@ def _condense(run: SandboxRun) -> dict:
         "containment": [{"target": c["target"], "status": c["status"]} for c in o.get("containment", [])],
         "page_text_excerpt": (dom.get("text_excerpt") or "")[:1500],
         "errors": o.get("errors"),
+        "visual_check": visual,
     }
 
 
@@ -123,10 +127,14 @@ def scan_url(ctx: ToolContext, url: str) -> dict:
     except UnsafeTarget as exc:
         return {"error": f"target refused by URL guard: {exc}"}
     save_artifacts(run)
+    # Independent vision model looks at the screenshot (taken inside the sandbox) and is cross-checked vs the DOM later.
+    visual = verify_screenshot((run.result or {}).get("screenshot_png_b64"),
+                               (run.result or {}).get("final_url") or url, ctx.lang)
     with ctx.lock:
         ctx.runs.append(run)
         ctx.scan_ids.append(run.scan_id)
-    return _condense(run)
+        ctx.visuals[run.scan_id] = visual
+    return _condense(run, visual)
 
 
 def dns_lookup(ctx: ToolContext, domain: str) -> dict:
