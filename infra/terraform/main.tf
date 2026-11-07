@@ -130,6 +130,8 @@ resource "vultr_instance" "control_plane" {
   user_data = templatefile("${path.module}/cloud-init.yaml.tftpl", {
     admin_user    = var.admin_user
     ssh_pubkey    = local.ssh_pubkey
+    extra_admins  = var.extra_admins
+    allow_users   = join(" ", concat([var.admin_user], keys(var.extra_admins)))
     repo_url      = var.repo_url
     repo_ref      = var.repo_ref
     repo_dir      = local.repo_dir

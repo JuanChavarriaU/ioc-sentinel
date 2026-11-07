@@ -10,6 +10,15 @@ users:
     lock_passwd: true
     ssh_authorized_keys:
       - ${ssh_pubkey}
+%{ for name, key in extra_admins ~}
+  - name: ${name}
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    lock_passwd: true
+    ssh_authorized_keys:
+      - ${key}
+%{ endfor ~}
 
 disable_root: true
 ssh_pwauth: false
@@ -25,7 +34,7 @@ write_files:
       PermitRootLogin no
       PasswordAuthentication no
       KbdInteractiveAuthentication no
-      AllowUsers ${admin_user}
+      AllowUsers ${allow_users}
   - path: /etc/ioc-sentinel/provision.env
     permissions: "0644"
     content: |
