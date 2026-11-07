@@ -6,7 +6,7 @@ Built for the **Vultr Agent Rush Hackathon - Track 01 · Blast Radius Zero**.
 
 > An agent that only chats is a demo; an agent that executes safely is a product.
 
-- **Live demo:** <https://149-28-97-81.sslip.io/> (the host name encodes the VM IP; it changes if you redeploy, see [Deploy](#deploy-and-tear-down-one-command))
+- **Live demo:** <https://45-77-162-181.sslip.io/> (the host name encodes the VM IP; it changes if you redeploy, see [Deploy](#deploy-and-tear-down-one-command))
 - **Test fixture (public, harmless):** <https://pander64.github.io/traps/> - [repo](https://github.com/Pander64/traps)
 - **Architecture deep-dive (Spanish):** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
@@ -85,8 +85,8 @@ make down CONFIRM=yes           # = scripts/deploy.sh down    destroys everythin
 ```
 
 `make up` generates `infra/terraform/terraform.tfvars` if missing (your public IP as the only SSH source), then:
-Terraform (VPC, firewall, VM, inference) → wait for SSH/cloud-init → rsync the code → bootstrap (Docker, jail, gVisor,
-sandbox image, venv) → write the inference key into the VM over SSH stdin → Caddy + `ioc-api` systemd service →
+Terraform (VPC, firewall, VM, inference) → wait for SSH/cloud-init → rsync the code → bootstrap (Docker, jail,
+sandbox image, venv; gVisor only if `enable_gvisor = true`) → write the inference key into the VM over SSH stdin → Caddy + `ioc-api` systemd service →
 smoke test (containment probes must all be blocked) → prints the HTTPS URL (`<ip-with-dashes>.sslip.io`, no DNS needed).
 It is idempotent and works with a private or public repo (the code is rsynced, not cloned).
 Cost: ~US$20/month prorated hourly for the VM; inference is pay-per-use.
